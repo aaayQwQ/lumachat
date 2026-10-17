@@ -178,6 +178,8 @@ func main() {
 	mux.HandleFunc("/api/chat", chain(handleChatStream, mwRecover, mwLog, mwAuth))
 	mux.HandleFunc("/api/providers", chain(handleProviders, mwRecover, mwLog, mwAuth))
 	mux.HandleFunc("/api/providers/add", chain(handleAddProvider, mwRecover, mwLog, mwAuth))
+	mux.HandleFunc("/api/providers/update", chain(handleUpdateProvider, mwRecover, mwLog, mwAuth))
+	mux.HandleFunc("/api/session/preferences", chain(handleSessionPreferences, mwRecover, mwLog, mwAuth))
 	mux.HandleFunc("/api/providers/delete", chain(handleDeleteProvider, mwRecover, mwLog, mwAuth))
 	mux.HandleFunc("/api/providers/test", chain(handleTestProvider, mwRecover, mwLog, mwAuth))
 	mux.HandleFunc("/api/models/fetch", chain(handleFetchModels, mwRecover, mwLog, mwAuth))
@@ -454,6 +456,28 @@ func handleAddProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, APIResp{Code: 0, Message: "添加成功"})
 }
 
+func handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OriginalName string `json:"original_name"`
+		Name string `json:"name"`
+		BaseURL string `json:"base_url"`
+		APIKey string `json:"api_key"`
+		Models []string `json:"models"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
+	req.OriginalName = strings.TrimSpace(req.OriginalName); req.Name = strings.TrimSpace(req.Name); req.BaseURL = strings.TrimSpace(req.BaseURL)
+	if req.OriginalName == "" || req.Name == "" || req.BaseURL == "" || len(req.Models) == 0 { writeErr(w, 400, "名称、URL、模型不能为空"); return }
+	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") { writeErr(w, 400, "BaseURL 必须以 http:// 或 https:// 开头"); return }
+	mu.Lock(); old, ok := providers[req.OriginalName]
+	if !ok { mu.Unlock(); writeErr(w, 404, "服务商不存在"); return }
+	if req.Name != req.OriginalName { if _, exists := providers[req.Name]; exists { mu.Unlock(); writeErr(w, 400, "新名称已被使用"); return }; delete(providers, req.OriginalName) }
+	if strings.TrimSpace(req.APIKey) == "" || strings.Contains(req.APIKey, "...") || req.APIKey == "****" { req.APIKey = old.APIKey }
+	providers[req.Name] = Provider{Name:req.Name, BaseURL:req.BaseURL, APIKey:req.APIKey, Models:req.Models, CreatedAt:old.CreatedAt}; saveConfigUnsafe()
+	for _, u := range users { if u.SelectedProv == req.OriginalName { u.SelectedProv = req.Name; if !containsString(req.Models, u.SelectedModel) { u.SelectedModel = req.Models[0] } } }
+	mu.Unlock(); saveUsersDebounced(); writeJSON(w, 200, APIResp{Code:0, Message:"服务商已更新"})
+}
+func containsString(items []string, target string) bool { for _, item := range items { if item == target { return true } }; return false }
+
 func handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
@@ -550,6 +574,14 @@ func handleFetchModels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, models)
+}
+
+func handleSessionPreferences(w http.ResponseWriter, r *http.Request) {
+	username := r.Header.Get("X-User")
+	var req struct { SessionID string `json:"session_id"`; ThinkEnabled bool `json:"think_enabled"`; ShowTokens bool `json:"show_tokens"` }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
+	mu.Lock(); u, ok := users[username]; if !ok { mu.Unlock(); writeErr(w, 401, "未授权"); return }; s, ok := u.Sessions[req.SessionID]; if !ok || s == nil { mu.Unlock(); writeErr(w, 404, "会话不存在"); return }
+	think, tokens := req.ThinkEnabled, req.ShowTokens; s.ThinkEnabled = &think; s.ShowTokens = &tokens; s.UpdatedAt = time.Now(); mu.Unlock(); saveUsersDebounced(); writeJSON(w, 200, APIResp{Code:0, Message:"已保存"})
 }
 
 func handleNewSession(w http.ResponseWriter, r *http.Request) {
@@ -683,6 +715,8 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		SessionID string `json:"session_id"`
 		Prompt    string `json:"prompt"`
+		ThinkEnabled *bool `json:"think_enabled"`
+		ShowTokens *bool `json:"show_tokens"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, 400, "参数错误")
@@ -730,11 +764,16 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	sess.UpdatedAt = time.Now()
 
+	if req.ThinkEnabled != nil { v := *req.ThinkEnabled; sess.ThinkEnabled = &v }
+	if req.ShowTokens != nil { v := *req.ShowTokens; sess.ShowTokens = &v }
 	apiMsgs := make([]Message, len(sess.Messages))
 	copy(apiMsgs, sess.Messages)
 	model := u.SelectedModel
 	showTokens := u.ShowTokens
-	disableThink := u.DisableThink
+	if sess.ShowTokens != nil { showTokens = *sess.ShowTokens }
+	thinkEnabled := !u.DisableThink
+	if sess.ThinkEnabled != nil { thinkEnabled = *sess.ThinkEnabled }
+	disableThink := !thinkEnabled
 	disableWeb := u.DisableWeb
 	mu.Unlock()
 
