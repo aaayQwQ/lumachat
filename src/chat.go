@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -57,6 +58,10 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	sess.Messages = append(sess.Messages, Message{
 		Role: "user", Content: req.Prompt, Timestamp: time.Now(),
 	})
+	// Bound persisted conversation history to prevent users.json and request memory growing forever.
+	if len(sess.Messages) > 60 {
+		sess.Messages = append([]Message(nil), sess.Messages[len(sess.Messages)-60:]...)
+	}
 	if sess.Title == "新对话" || sess.Title == "" {
 		t := []rune(req.Prompt)
 		if len(t) > 12 {
@@ -124,7 +129,7 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+prov.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(prov.APIKey))
 	httpReq.Header.Set("Accept", "text/event-stream")
 
 	client := &http.Client{Timeout: 0}
@@ -139,14 +144,21 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		fmt.Fprintf(w, "event: error\ndata: %s\n\n", fmt.Sprintf("上游返回 HTTP %d", resp.StatusCode))
-		if canFlush {
-			flusher.Flush()
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		msg := fmt.Sprintf("上游返回 HTTP %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusUnauthorized {
+			msg = "API Key 认证失败（HTTP 401）：请检查密钥是否有效，并确认 Base URL 与密钥来自同一服务商。"
+			if len(detail) > 0 { msg += " " + strings.TrimSpace(string(detail)) }
+		} else if len(detail) > 0 {
+			msg += ": " + strings.TrimSpace(string(detail))
 		}
+		msg = strings.ReplaceAll(strings.ReplaceAll(msg, "\\", "\\\\"), "\n", " ")
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", msg)
+		if canFlush { flusher.Flush() }
 		return
 	}
 
-	reader := bufio.NewReaderSize(resp.Body, 64*1024)
+	reader := bufio.NewReaderSize(resp.Body, 16*1024)
 	var fullReply strings.Builder
 	var pTok, cTok int
 
@@ -177,7 +189,11 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 					}
 					if len(chunk.Choices) > 0 {
 						if c := chunk.Choices[0].Delta.Content; c != "" {
-							fullReply.WriteString(c)
+							if fullReply.Len() < 2<<20 {
+								remaining := (2 << 20) - fullReply.Len()
+								if len(c) > remaining { c = c[:remaining] }
+								fullReply.WriteString(c)
+							}
 							esc := strings.ReplaceAll(c, "\n", "\ndata: ")
 							fmt.Fprintf(w, "data: %s\n\n", esc)
 							if canFlush {
@@ -204,6 +220,7 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 			s.Messages = append(s.Messages, Message{
 				Role: "assistant", Content: reply, Timestamp: time.Now(),
 			})
+			if len(s.Messages) > 60 { s.Messages = append([]Message(nil), s.Messages[len(s.Messages)-60:]...) }
 			s.UpdatedAt = time.Now()
 		}
 	}
