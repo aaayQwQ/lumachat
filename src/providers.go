@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"\n\t"net/url"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
