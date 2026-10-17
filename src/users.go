@@ -137,40 +137,43 @@ func handleUserState(w http.ResponseWriter, r *http.Request) {
 func handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	username := r.Header.Get("X-User")
 	var req struct {
-		SelectedProv  string `json:"selected_prov"`
+		SelectedProv string `json:"selected_prov"`
 		SelectedModel string `json:"selected_model"`
-		ShowTokens    bool   `json:"show_tokens"`
-		DisableThink  bool   `json:"disable_think"`
-		DisableWeb    bool   `json:"disable_web"`
+		ShowTokens bool `json:"show_tokens"`
+		DisableThink bool `json:"disable_think"`
+		DisableWeb bool `json:"disable_web"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeErr(w, 400, "参数错误")
-		return
-	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
+	req.SelectedProv = strings.TrimSpace(req.SelectedProv)
+	req.SelectedModel = strings.TrimSpace(req.SelectedModel)
 	mu.Lock()
-	if u, ok := users[username]; ok {
-		u.SelectedProv = req.SelectedProv
-		u.SelectedModel = req.SelectedModel
-		u.ShowTokens = req.ShowTokens
-		u.DisableThink = req.DisableThink
-		u.DisableWeb = req.DisableWeb
+	user, ok := users[username]
+	if !ok { mu.Unlock(); writeErr(w, 401, "用户不存在，请重新登录"); return }
+	if req.SelectedProv == "" {
+		if len(providers) > 0 { mu.Unlock(); writeErr(w, 400, "请先选择服务商"); return }
+		req.SelectedModel = ""
+	} else {
+		provider, exists := providers[req.SelectedProv]
+		if !exists { mu.Unlock(); writeErr(w, 400, "所选服务商不存在，请刷新页面后重试"); return }
+		if !containsString(provider.Models, req.SelectedModel) { mu.Unlock(); writeErr(w, 400, "所选模型不属于当前服务商，请重新选择"); return }
 	}
+	user.SelectedProv, user.SelectedModel = req.SelectedProv, req.SelectedModel
+	user.ShowTokens, user.DisableThink, user.DisableWeb = req.ShowTokens, req.DisableThink, req.DisableWeb
 	mu.Unlock()
 	saveUsersDebounced()
-	writeJSON(w, 200, APIResp{Code: 0, Message: "已保存"})
+	writeJSON(w, 200, APIResp{Code: 0, Message: "偏好设置已保存"})
 }
 
 func handleUpdateTheme(w http.ResponseWriter, r *http.Request) {
 	username := r.Header.Get("X-User")
-	var req struct {
-		Theme string `json:"theme"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	var req struct { Theme string `json:"theme"` }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
+	if req.Theme != "light" && req.Theme != "dark" { writeErr(w, 400, "theme 只能是 light 或 dark"); return }
 	mu.Lock()
-	if u, ok := users[username]; ok {
-		u.Theme = req.Theme
-	}
+	user, ok := users[username]
+	if !ok { mu.Unlock(); writeErr(w, 401, "用户不存在，请重新登录"); return }
+	user.Theme = req.Theme
 	mu.Unlock()
 	saveUsersDebounced()
-	writeJSON(w, 200, APIResp{Code: 0})
+	writeJSON(w, 200, APIResp{Code: 0, Message: "主题已保存"})
 }
