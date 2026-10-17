@@ -791,7 +791,8 @@ function fillSettingsModels(preferred) {
 }
 function onSettingsProvChange(){fillSettingsModels('');}
 function onSettingsModelChange(){}
-\nfunction saveAllSettings() {
+
+async function saveAllSettings() {
   var payload = {
     selected_prov: document.getElementById('settings-prov-select').value,
     selected_model: document.getElementById('settings-model-select').value,
