@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LumaChat</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+:root{--blue:#1a73e8;--bg:#f8f9fa;--surface:#fff;--text:#202124;--sub:#5f6368;--border:#dadce0;--danger:#d93025;--ok:#34a853;--hover:#f1f3f4}
+[data-theme="dark"]{--bg:#1f1f1f;--surface:#2d2d2d;--text:#e8eaed;--sub:#9aa0a6;--border:#3c4043;--hover:#3c4043}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:Roboto,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden;font-size:14px}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(4px)}
+.modal.hidden{display:none}
+.card{background:var(--surface);border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,.2);max-height:90vh;overflow:hidden;display:flex;flex-direction:column;width:480px}
+.card.wide{width:720px}
+.card-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-head h2{margin:0;font-size:18px;color:var(--blue)}
+.card-body{padding:20px 24px;overflow-y:auto;flex:1}
+.card-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;background:var(--bg)}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:500}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue)}
+.btn{padding:9px 18px;border-radius:8px;border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:500;transition:opacity .15s}
+.btn:hover{opacity:.9}
+.btn:disabled{background:#9aa0a6;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn.ghost:hover{background:var(--hover)}
+.btn.danger{background:var(--danger)}
+.btn.ok{background:var(--ok)}
+.btn.sm{padding:6px 12px;font-size:12px}
+.link{color:var(--blue);cursor:pointer;font-size:13px}
+.link:hover{text-decoration:underline}
+#sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.side-head{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.brand{font-weight:700;color:var(--blue);font-size:16px;flex:1}
+.side-body{flex:1;overflow-y:auto;padding:10px}
+#session-list{display:flex;flex-direction:column;gap:2px}
+.session-row{display:flex;align-items:center;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--text);gap:6px}
+.session-row:hover{background:var(--hover)}
+.session-row.active{background:rgba(26,115,232,.12);color:var(--blue);font-weight:500}
+.session-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.session-menu{opacity:0;border:none;background:transparent;color:var(--sub);padding:2px 6px;border-radius:4px;font-size:14px}
+.session-row:hover .session-menu{opacity:1}
+.session-menu:hover{background:rgba(0,0,0,.08)}
+#main{flex:1;display:flex;flex-direction:column;background:var(--surface);min-width:0}
+.topbar{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-shrink:0}
+.topbar select{padding:7px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px}
+.topbar .spacer{flex:1}
+.icon-btn{background:transparent;border:1px solid var(--border);color:var(--text);width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.icon-btn:hover{background:var(--hover)}
+#chat-box{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
+.msg{max-width:min(760px,80%);line-height:1.65;font-size:15px;word-wrap:break-word;position:relative;padding:14px 18px;border-radius:14px}
+.msg.user{align-self:flex-end;background:rgba(26,115,232,.1);color:var(--text);white-space:pre-wrap}
+.msg.assistant{align-self:flex-start;background:var(--bg);border:1px solid var(--border)}
+.msg.assistant.error{background:rgba(217,48,37,.08);border-color:rgba(217,48,37,.3);color:var(--danger)}
+.msg-tools{position:absolute;top:-10px;right:8px;display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.msg:hover .msg-tools{opacity:1}
+.msg-tools button{background:var(--surface);border:1px solid var(--border);color:var(--sub);width:26px;height:26px;border-radius:50%;font-size:12px;display:flex;align-items:center;justify-content:center}
+.msg-tools button:hover{color:var(--blue);border-color:var(--blue)}
+.msg.assistant p{margin:0 0 10px}
+.msg.assistant p:last-child{margin-bottom:0}
+.msg.assistant pre{background:#f6f8fa;border:1px solid var(--border);border-radius:8px;padding:0;overflow:hidden;margin:10px 0;position:relative}
+[data-theme="dark"] .msg.assistant pre{background:#1e1e1e}
+.code-head{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(0,0,0,.04);border-bottom:1px solid var(--border);font-size:12px;color:var(--sub)}
+[data-theme="dark"] .code-head{background:rgba(255,255,255,.04)}
+.code-head .lang{font-weight:600}
+.code-head button{background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px}
+.code-head button:hover{text-decoration:underline}
+.msg.assistant pre code{display:block;padding:12px 14px;overflow-x:auto;font-family:'SF Mono',Consolas,'Courier New',monospace;font-size:13px;line-height:1.5}
+.msg.assistant :not(pre)>code{background:rgba(0,0,0,.06);padding:2px 6px;border-radius:4px;font-family:'SF Mono',Consolas,monospace;font-size:13px}
+[data-theme="dark"] .msg.assistant :not(pre)>code{background:rgba(255,255,255,.08)}
+.msg.assistant table{border-collapse:collapse;margin:10px 0;font-size:13px}
+.msg.assistant th,.msg.assistant td{border:1px solid var(--border);padding:6px 10px}
+.msg.assistant th{background:var(--hover)}
+.msg.assistant blockquote{border-left:3px solid var(--border);margin:10px 0;padding:4px 12px;color:var(--sub)}
+.msg.assistant ul,.msg.assistant ol{margin:8px 0;padding-left:22px}
+.msg.assistant a{color:var(--blue)}
+.msg.assistant h1,.msg.assistant h2,.msg.assistant h3{margin:14px 0 8px;line-height:1.3}
+.msg.assistant h1{font-size:20px}.msg.assistant h2{font-size:18px}.msg.assistant h3{font-size:16px}
+.token-info{margin-top:8px;font-size:11px;color:var(--sub);font-style:italic}
+#input-bar{padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:10px;align-items:flex-end;flex-shrink:0}
+.input-wrap{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:8px 14px;display:flex;align-items:center}
+.input-wrap textarea{flex:1;border:none;background:transparent;resize:none;outline:none;color:var(--text);font-size:15px;line-height:1.5;max-height:140px;min-height:22px}
+.send-btn{width:44px;height:44px;border-radius:50%;border:none;background:var(--blue);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
+.send-btn:disabled{background:#9aa0a6;cursor:not-allowed}
+.send-btn:hover:not(:disabled){opacity:.85}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px}
+.tab{padding:10px 18px;background:none;border:none;color:var(--sub);font-size:14px;font-weight:500;border-bottom:2px solid transparent;cursor:pointer}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.prov-list{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+.prov-item{border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--bg)}
+.prov-item-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.prov-item-head .name{font-weight:600;flex:1;color:var(--text)}
+.prov-item-head .badge{background:rgba(26,115,232,.1);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.prov-item-body{font-size:12px;color:var(--sub);word-break:break-all}
+.prov-item-actions{display:flex;gap:6px;margin-top:8px}
+.empty{padding:30px;text-align:center;color:var(--sub);font-size:13px;border:1px dashed var(--border);border-radius:10px}
+.model-list{border:1px solid var(--border);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;background:var(--bg)}
+.model-item{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px}
+.model-item input[type=checkbox]{width:16px;height:16px;cursor:pointer}
+#toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast-item{padding:10px 20px;border-radius:8px;color:#fff;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:fadein .2s;pointer-events:auto}
+.toast-item.ok{background:var(--ok)}
+.toast-item.err{background:var(--danger)}
+.toast-item.info{background:#3c4043}
+@keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.dots::after{content:'';animation:dots 1.4s infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+</style>
+</head>
+<body>
+
+<div class="modal" id="auth-modal">
+  <div class="card" style="width:400px">
+    <div class="card-head">
+      <h2 id="auth-title">登录 LumaChat</h2>
+    </div>
+    <div class="card-body">
+      <div class="field"><label>用户名</label><input type="text" id="auth-user" placeholder="请输入用户名" autocomplete="username"></div>
+      <div class="field"><label>密码</label><input type="password" id="auth-pass" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()"></div>
+    </div>
+    <div class="card-foot">
+      <span class="link" onclick="toggleAuthMode()" id="auth-switch" style="margin-right:auto">没有账号？去注册</span>
+      <button class="btn" onclick="doAuth()" id="auth-btn">登 录</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="settings-modal">
+  <div class="card wide">
+    <div class="card-head">
+      <h2>设置</h2>
+      <button class="icon-btn" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="card-body">
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('providers',this)">服务商</button>
+        <button class="tab" onclick="switchTab('add-provider',this)">添加服务商</button>
+        <button class="tab" onclick="switchTab('preferences',this)">偏好设置</button>
+        <button class="tab" onclick="switchTab('account',this)">账号</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-providers">
+        <div class="prov-list" id="prov-list"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-add-provider">
+        <div class="field"><label>服务商名称</label><input type="text" id="add-name" placeholder="例如：OpenAI 官方"></div>
+        <div class="field"><label>API Base URL</label><input type="text" id="add-url" placeholder="https://api.openai.com/v1"></div>
+        <div class="field"><label>API Key</label><input type="password" id="add-key" placeholder="sk-..."></div>
+        <div class="field">
+          <label>操作</label>
+          <div style="display:flex;gap:8px">
+            <button class="btn ok sm" onclick="testProvider()">测试连接</button>
+            <button class="btn sm" onclick="fetchModels()">获取模型列表</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>模型（勾选）</label>
+          <div class="model-list" id="model-list"><div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">点击上方"获取模型列表"</div></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-preferences">
+        <div class="field" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="pref-show-tokens" style="width:18px;height:18px">
+          <label for="pref-show-tokens" style="margin:0">显示 Token 消耗统计</label>
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="pref-disable-think" style="width:18px;height:18px">
+          <label for="pref-disable-think" style="margin:0">屏蔽思考过程（reasoning）</label>
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="pref-disable-web" style="width:18px;height:18px">
+          <label for="pref-disable-web" style="margin:0">屏蔽联网搜索</label>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-account">
+        <div class="field"><label>当前用户</label><input type="text" id="acc-user" disabled></div>
+        <div class="field"><label>原密码</label><input type="password" id="acc-old-pass" autocomplete="current-password"></div>
+        <div class="field"><label>新密码</label><input type="password" id="acc-new-pass" autocomplete="new-password"></div>
+        <button class="btn" onclick="changePassword()">修改密码</button>
+      </div>
+    </div>
+    <div class="card-foot">
+      <button class="btn ghost" onclick="closeSettings()">关闭</button>
+      <button class="btn" onclick="saveAllSettings()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="rename-modal">
+  <div class="card" style="width:400px">
+    <div class="card-head"><h2>重命名会话</h2></div>
+    <div class="card-body">
+      <div class="field"><label>新标题</label><input type="text" id="rename-input" maxlength="100"></div>
+    </div>
+    <div class="card-foot">
+      <button class="btn ghost" onclick="closeRename()">取消</button>
+      <button class="btn" onclick="confirmRename()">确定</button>
+    </div>
+  </div>
+</div>
+
+<aside id="sidebar">
+  <div class="side-head">
+    <div class="brand">LumaChat</div>
+    <button class="icon-btn" onclick="toggleTheme()" title="切换主题" id="theme-btn">🌙</button>
+  </div>
+  <div class="side-body">
+    <button class="btn" style="width:100%;margin-bottom:12px" onclick="createSession()">＋ 新对话</button>
+    <div id="session-list"></div>
+  </div>
+</aside>
+
+<div id="main">
+  <div class="topbar">
+    <select id="prov-select" onchange="onProvChange()"></select>
+    <select id="model-select" onchange="onModelChange()"></select>
+    <div class="spacer"></div>
+    <button class="icon-btn" onclick="openSettings()" title="设置">⚙</button>
+  </div>
+  <div id="chat-box"></div>
+  <div id="input-bar">
+    <div class="input-wrap">
+      <textarea id="prompt-input" placeholder="输入消息，Enter 发送，Shift+Enter 换行" rows="1" onkeydown="onKeyDown(event)" oninput="autoResize(this)"></textarea>
+    </div>
+    <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  highlight: function(code, lang) {
+    try {
+      if (lang && hljs.getLanguage(lang)) {
+        return hljs.highlight(code, {language: lang, ignoreIllegals: true}).value;
+      }
+      return hljs.highlightAuto(code).value;
+    } catch(e) {
+      return code.replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; });
+    }
+  }
+});
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  return DOMPurify.sanitize(marked.parse(text), {ADD_ATTR: ['target']});
+}
+
+function decorateCodeBlocks(container) {
+  container.querySelectorAll('pre').forEach(function(pre) {
+    if (pre.parentNode.classList.contains('code-wrap')) return;
+    var codeEl = pre.querySelector('code');
+    var lang = '';
+    if (codeEl) {
+      var m = (codeEl.className || '').match(/language-([\w+-]+)/);
+      if (m) lang = m[1];
+    }
+    var wrap = document.createElement('div');
+    wrap.className = 'code-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+
+    var head = document.createElement('div');
+    head.className = 'code-head';
+    var langSpan = document.createElement('span');
+    langSpan.className = 'lang';
+    langSpan.textContent = lang || 'code';
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = '复制';
+    copyBtn.onclick = function() {
+      var txt = codeEl ? codeEl.innerText : pre.innerText;
+      navigator.clipboard.writeText(txt).then(function() {
+        copyBtn.textContent = '已复制';
+        setTimeout(function(){ copyBtn.textContent = '复制'; }, 1500);
+      });
+    };
+    head.appendChild(langSpan);
+    head.appendChild(copyBtn);
+    wrap.insertBefore(head, pre);
+  });
+}
+
+var currentUser = '', authToken = '', isRegisterMode = false, userState = null, providers = [];
+var sending = false, abortCtrl = null, currentSessionForRename = null;
+
+function toast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast-item ' + (type || 'info');
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(function(){ el.remove(); }, 2500);
+}
+
+function toggleAuthMode() {
+  isRegisterMode = !isRegisterMode;
+  document.getElementById('auth-title').innerText = isRegisterMode ? '注册 LumaChat' : '登录 LumaChat';
+  document.getElementById('auth-btn').innerText = isRegisterMode ? '注 册' : '登 录';
+  document.getElementById('auth-switch').innerText = isRegisterMode ? '已有账号？去登录' : '没有账号？去注册';
+}
+
+async function doAuth() {
+  var u = document.getElementById('auth-user').value.trim();
+  var p = document.getElementById('auth-pass').value;
+  if (!u || !p) return toast('请输入账号密码', 'err');
+  try {
+    var res = await fetch(isRegisterMode ? '/api/register' : '/api/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: u, password: p})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '请求失败', 'err');
+    if (isRegisterMode) { toast('注册成功，请登录', 'ok'); toggleAuthMode(); }
+    else {
+      currentUser = data.data.username;
+      authToken = data.data.token;
+      document.getElementById('auth-modal').classList.add('hidden');
+      await initApp();
+    }
+  } catch(e) { toast('网络错误: ' + e.message, 'err'); }
+}
+
+async function initApp() {
+  await loadUserState();
+  await loadProviders();
+  if (userState && userState.theme === 'dark') applyTheme(true);
+}
+
+async function loadUserState() {
+  var res = await fetch('/api/user/state', {headers: {'X-User': currentUser, 'Authorization': 'Bearer ' + authToken}});
+  if (!res.ok) return toast('登录状态失效', 'err');
+  userState = await res.json();
+  if (!userState.sessions) userState.sessions = {};
+  if (!userState.active_sess_id) userState.active_sess_id = Object.keys(userState.sessions)[0];
+  renderSessions();
+  renderChat();
+  syncPrefsUI();
+}
+
+async function loadProviders() {
+  var res = await fetch('/api/providers', {headers: {'X-User': currentUser, 'Authorization': 'Bearer ' + authToken}});
+  providers = await res.json();
+  renderProvSelect();
+  renderProvList();
+}
+
+function renderProvSelect() {
+  var sel = document.getElementById('prov-select');
+  var cur = sel.value || (userState && userState.selected_prov);
+  sel.innerHTML = '';
+  if (!providers.length) { sel.innerHTML = '<option>无服务商</option>'; return; }
+  providers.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.name; o.textContent = p.name;
+    sel.appendChild(o);
+  });
+  if (cur && providers.some(function(p){ return p.name === cur; })) sel.value = cur;
+  renderModelSelect();
+}
+
+function renderModelSelect() {
+  var pName = document.getElementById('prov-select').value;
+  var prov = providers.find(function(p){ return p.name === pName; });
+  var mSel = document.getElementById('model-select');
+  var cur = mSel.value || (userState && userState.selected_model);
+  mSel.innerHTML = '';
+  if (!prov || !prov.models || !prov.models.length) { mSel.innerHTML = '<option>无模型</option>'; return; }
+  prov.models.forEach(function(m) {
+    var o = document.createElement('option'); o.value = m; o.textContent = m;
+    mSel.appendChild(o);
+  });
+  if (cur && prov.models.indexOf(cur) >= 0) mSel.value = cur;
+}
+
+function onProvChange() { renderModelSelect(); syncSettingsSilent(); }
+function onModelChange() { syncSettingsSilent(); }
+
+function renderSessions() {
+  var list = document.getElementById('session-list');
+  list.innerHTML = '';
+  if (!userState || !userState.sessions) return;
+  var ids = Object.keys(userState.sessions).sort(function(a,b) {
+    return (userState.sessions[b].updated_at || '').localeCompare(userState.sessions[a].updated_at || '');
+  });
+  ids.forEach(function(id) {
+    var s = userState.sessions[id];
+    var row = document.createElement('div');
+    row.className = 'session-row' + (id === userState.active_sess_id ? ' active' : '');
+    var title = document.createElement('span');
+    title.className = 'session-title';
+    title.textContent = s.title || '新对话';
+    row.appendChild(title);
+    var menu = document.createElement('button');
+    menu.className = 'session-menu';
+    menu.textContent = '⋮';
+    menu.onclick = function(e) { e.stopPropagation(); showSessionMenu(id, s.title); };
+    row.appendChild(menu);
+    row.onclick = function() { switchSession(id); };
+    list.appendChild(row);
+  });
+}
+
+function showSessionMenu(id, title) {
+  var action = prompt('操作（输入数字）：\n1. 重命名\n2. 清空消息\n3. 删除会话', '1');
+  if (action === '1') {
+    currentSessionForRename = id;
+    document.getElementById('rename-input').value = title;
+    document.getElementById('rename-modal').classList.remove('hidden');
+  } else if (action === '2') {
+    if (confirm('确定清空该会话所有消息？')) clearSession(id);
+  } else if (action === '3') {
+    if (confirm('确定删除该会话？')) deleteSession(id);
+  }
+}
+
+function closeRename() { document.getElementById('rename-modal').classList.add('hidden'); }
+
+async function confirmRename() {
+  var title = document.getElementById('rename-input').value.trim();
+  if (!title) return toast('标题不能为空', 'err');
+  await fetch('/api/session/rename', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({session_id: currentSessionForRename, title: title})});
+  userState.sessions[currentSessionForRename].title = title;
+  renderSessions(); closeRename();
+}
+
+async function switchSession(id) {
+  if (sending) return toast('请等待当前回复结束', 'err');
+  if (id === userState.active_sess_id) return;
+  await fetch('/api/session/switch', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({session_id: id})});
+  userState.active_sess_id = id;
+  renderSessions(); renderChat();
+}
+
+async function createSession() {
+  if (sending) return toast('请等待当前回复结束', 'err');
+  var res = await fetch('/api/session/new', {method: 'POST', headers: {'X-User': currentUser, 'Authorization': 'Bearer ' + authToken}});
+  var data = await res.json();
+  if (!res.ok) return toast(data.message || '创建失败', 'err');
+  userState.sessions[data.data.id] = data.data;
+  userState.active_sess_id = data.data.id;
+  renderSessions(); renderChat();
+}
+
+async function deleteSession(id) {
+  if (sending) return toast('请等待当前回复结束', 'err');
+  var res = await fetch('/api/session/delete', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({session_id: id})});
+  var data = await res.json();
+  if (!res.ok) return toast(data.message || '删除失败', 'err');
+  delete userState.sessions[id];
+  if (userState.active_sess_id === id) {
+    userState.active_sess_id = Object.keys(userState.sessions)[0];
+  }
+  renderSessions(); renderChat();
+}
+
+async function clearSession(id) {
+  await fetch('/api/session/clear', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({session_id: id})});
+  userState.sessions[id].messages = [];
+  userState.sessions[id].title = '新对话';
+  renderSessions(); renderChat();
+}
+
+function renderChat() {
+  var box = document.getElementById('chat-box');
+  box.innerHTML = '';
+  if (!userState) return;
+  var s = userState.sessions[userState.active_sess_id];
+  if (!s || !s.messages) return;
+  s.messages.forEach(function(m){ appendMessageBubble(m.role, m.content); });
+  box.scrollTop = box.scrollHeight;
+}
+
+function appendMessageBubble(role, content) {
+  var box = document.getElementById('chat-box');
+  var div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
+  if (role === 'user') {
+    div.textContent = content;
+  } else {
+    div.innerHTML = renderMarkdown(content);
+    decorateCodeBlocks(div);
+    var tools = document.createElement('div');
+    tools.className = 'msg-tools';
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = '⧉';
+    copyBtn.title = '复制';
+    copyBtn.onclick = function() { navigator.clipboard.writeText(content); toast('已复制', 'ok'); };
+    tools.appendChild(copyBtn);
+    div.appendChild(tools);
+  }
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+}
+
+async function sendMessage() {
+  if (sending) return;
+  var ta = document.getElementById('prompt-input');
+  var txt = ta.value.trim();
+  if (!txt) return;
+
+  var s = userState.sessions[userState.active_sess_id];
+  if (!s) return toast('无活动会话', 'err');
+
+  ta.value = '';
+  autoResize(ta);
+  sending = true;
+  document.getElementById('send-btn').disabled = true;
+
+  s.messages = s.messages || [];
+  s.messages.push({role: 'user', content: txt, timestamp: new Date().toISOString()});
+  if (s.title === '新对话' || !s.title) {
+    s.title = txt.length > 12 ? txt.slice(0, 12) + '...' : txt;
+    renderSessions();
+  }
+  renderChat();
+
+  var assistantDiv = appendMessageBubble('assistant', '');
+  assistantDiv.classList.add('dots');
+  var content = '';
+
+  abortCtrl = new AbortController();
+
+  try {
+    var res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({session_id: s.id, prompt: txt}),
+      signal: abortCtrl.signal
+    });
+    if (!res.ok) {
+      var t = await res.text();
+      throw new Error(t || 'HTTP ' + res.status);
+    }
+
+    var reader = res.body.getReader();
+    var dec = new TextDecoder();
+    var buffer = '';
+    var evtName = 'message';
+    var dataLines = [];
+    var streamDone = false;
+
+    while (!streamDone) {
+      var r = await reader.read();
+      if (r.done) break;
+      buffer += dec.decode(r.value, {stream: true});
+      var idx;
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        var raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        evtName = 'message';
+        dataLines = [];
+        raw.split('\n').forEach(function(line) {
+          if (line.indexOf('event: ') === 0) evtName = line.slice(7);
+          else if (line.indexOf('data: ') === 0) dataLines.push(line.slice(6));
+        });
+        var data = dataLines.join('\n');
+
+        if (data === '[DONE]') { streamDone = true; break; }
+
+        if (evtName === 'error') {
+          assistantDiv.classList.remove('dots');
+          assistantDiv.classList.add('error');
+          assistantDiv.textContent = '错误: ' + data;
+          s.messages.push({role: 'assistant', content: '[错误] ' + data});
+          streamDone = true;
+          break;
+        }
+        if (evtName === 'usage') {
+          var parts = data.split(',');
+          var p = parseInt(parts[0], 10) || 0;
+          var c = parseInt(parts[1], 10) || 0;
+          if (userState.show_tokens) {
+            var info = document.createElement('div');
+            info.className = 'token-info';
+            info.textContent = '📊 Token: 提示 ' + p + ' / 回复 ' + c + ' / 总计 ' + (p + c);
+            assistantDiv.appendChild(info);
+          }
+        }
+        if (evtName === 'message' || evtName === '') {
+          content += data;
+          assistantDiv.classList.remove('dots');
+          assistantDiv.innerHTML = renderMarkdown(content);
+          decorateCodeBlocks(assistantDiv);
+          document.getElementById('chat-box').scrollTop = 999999;
+        }
+      }
+    }
+
+    assistantDiv.classList.remove('dots');
+    if (content) {
+      s.messages.push({role: 'assistant', content: content, timestamp: new Date().toISOString()});
+    }
+    renderChat();
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      toast('已停止', 'info');
+    } else {
+      assistantDiv.classList.remove('dots');
+      assistantDiv.classList.add('error');
+      assistantDiv.textContent = '请求失败: ' + e.message;
+      s.messages.push({role: 'assistant', content: '[请求失败] ' + e.message});
+    }
+  } finally {
+    sending = false;
+    abortCtrl = null;
+    document.getElementById('send-btn').disabled = false;
+  }
+}
+
+function openSettings() {
+  document.getElementById('settings-modal').classList.remove('hidden');
+  renderProvList();
+  syncPrefsUI();
+  document.getElementById('acc-user').value = currentUser;
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'providers') renderProvList();
+}
+
+function renderProvList() {
+  var box = document.getElementById('prov-list');
+  box.innerHTML = '';
+  if (!providers.length) {
+    box.innerHTML = '<div class="empty">暂无服务商，请到"添加服务商"标签添加</div>';
+    return;
+  }
+  providers.forEach(function(p) {
+    var item = document.createElement('div');
+    item.className = 'prov-item';
+    var modelList = p.models ? p.models.map(escapeHtml).join(', ') : '无';
+    var modelCount = p.models ? p.models.length : 0;
+    item.innerHTML =
+      '<div class="prov-item-head">' +
+        '<span class="name">' + escapeHtml(p.name) + '</span>' +
+        '<span class="badge">' + modelCount + ' 模型</span>' +
+      '</div>' +
+      '<div class="prov-item-body">' +
+        '<div>URL: ' + escapeHtml(p.base_url || '') + '</div>' +
+        '<div>Key: ' + escapeHtml(p.api_key || '') + '</div>' +
+        '<div>模型: ' + modelList + '</div>' +
+      '</div>' +
+      '<div class="prov-item-actions">' +
+        '<button class="btn danger sm">删除</button>' +
+      '</div>';
+    var delBtn = item.querySelector('button');
+    delBtn.onclick = function() { deleteProvider(p.name); };
+    box.appendChild(item);
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+async function deleteProvider(name) {
+  if (!confirm('确定删除服务商"' + name + '"？')) return;
+  var res = await fetch('/api/providers/delete', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({name: name})});
+  var data = await res.json();
+  if (!res.ok) return toast(data.message || '删除失败', 'err');
+  toast('已删除', 'ok');
+  await loadProviders();
+}
+
+async function testProvider() {
+  var url = document.getElementById('add-url').value.trim();
+  var key = document.getElementById('add-key').value.trim();
+  if (!url) return toast('请填写 Base URL', 'err');
+  var res = await fetch('/api/providers/test', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({base_url: url, api_key: key})});
+  var data = await res.json();
+  if (!res.ok) return toast(data.message || '连接失败', 'err');
+  toast('连接成功', 'ok');
+}
+
+async function fetchModels() {
+  var url = document.getElementById('add-url').value.trim();
+  var key = document.getElementById('add-key').value.trim();
+  if (!url) return toast('请填写 Base URL', 'err');
+  var list = document.getElementById('model-list');
+  list.innerHTML = '<div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">加载中...</div>';
+  var res = await fetch('/api/models/fetch', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({base_url: url, api_key: key})});
+  var models = await res.json();
+  if (!res.ok) { list.innerHTML = '<div class="empty">获取失败</div>'; return; }
+  if (!models.length) { list.innerHTML = '<div class="empty">未获取到模型</div>'; return; }
+  list.innerHTML = '';
+  models.forEach(function(m) {
+    var lbl = document.createElement('label');
+    lbl.className = 'model-item';
+    lbl.innerHTML = '<input type="checkbox" class="model-chk" value="' +
+      escapeHtml(m) + '" checked> ' + escapeHtml(m);
+    list.appendChild(lbl);
+  });
+}
+
+async function saveAllSettings() {
+  var payload = {
+    selected_prov: document.getElementById('prov-select').value,
+    selected_model: document.getElementById('model-select').value,
+    show_tokens: document.getElementById('pref-show-tokens').checked,
+    disable_think: document.getElementById('pref-disable-think').checked,
+    disable_web: document.getElementById('pref-disable-web').checked
+  };
+  await fetch('/api/user/settings', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify(payload)});
+  userState.show_tokens = payload.show_tokens;
+  userState.disable_think = payload.disable_think;
+  userState.disable_web = payload.disable_web;
+
+  var name = document.getElementById('add-name').value.trim();
+  var url = document.getElementById('add-url').value.trim();
+  var key = document.getElementById('add-key').value.trim();
+  var checked = Array.prototype.slice.call(document.querySelectorAll('.model-chk:checked')).map(function(c){ return c.value; });
+  if (name && url && checked.length) {
+    var res = await fetch('/api/providers/add', {method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({name: name, base_url: url, api_key: key, models: checked})});
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '添加失败', 'err');
+    toast('服务商已添加', 'ok');
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-url').value = '';
+    document.getElementById('add-key').value = '';
+    document.getElementById('model-list').innerHTML = '<div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">点击上方"获取模型列表"</div>';
+    await loadProviders();
+  }
+  toast('已保存', 'ok');
+  closeSettings();
+}
+
+async function syncSettingsSilent() {
+  if (!userState) return;
+  var payload = {
+    selected_prov: document.getElementById('prov-select').value,
+    selected_model: document.getElementById('model-select').value,
+    show_tokens: userState.show_tokens,
+    disable_think: userState.disable_think,
+    disable_web: userState.disable_web
+  };
+  userState.selected_prov = payload.selected_prov;
+  userState.selected_model = payload.selected_model;
+  await fetch('/api/user/settings', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify(payload)});
+}
+
+function syncPrefsUI() {
+  if (!userState) return;
+  document.getElementById('pref-show-tokens').checked = !!userState.show_tokens;
+  document.getElementById('pref-disable-think').checked = !!userState.disable_think;
+  document.getElementById('pref-disable-web').checked = !!userState.disable_web;
+}
+
+async function changePassword() {
+  var oldPass = document.getElementById('acc-old-pass').value;
+  var newPass = document.getElementById('acc-new-pass').value;
+  if (!oldPass || !newPass) return toast('请填写完整', 'err');
+  var res = await fetch('/api/user/password', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({old_password: oldPass, new_password: newPass})});
+  var data = await res.json();
+  if (!res.ok) return toast(data.message || '修改失败', 'err');
+  toast('密码已修改', 'ok');
+  document.getElementById('acc-old-pass').value = '';
+  document.getElementById('acc-new-pass').value = '';
+}
+
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.getElementById('theme-btn').textContent = dark ? '☀' : '🌙';
+  var link = document.querySelector('link[href*="highlight.js"]');
+  if (link) link.href = dark
+    ? 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css'
+    : 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css';
+}
+
+async function toggleTheme() {
+  var dark = document.documentElement.getAttribute('data-theme') !== 'dark';
+  applyTheme(dark);
+  await fetch('/api/user/theme', {method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+    body: JSON.stringify({theme: dark ? 'dark' : 'light'})});
+  if (userState) userState.theme = dark ? 'dark' : 'light';
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    document.getElementById('prompt-input').focus();
+  }
+  if (e.key === 'Escape') {
+    if (sending && abortCtrl) { abortCtrl.abort(); }
+    document.querySelectorAll('.modal:not(.hidden)').forEach(function(m){ m.classList.add('hidden'); });
+  }
+});
+</script>
+</body>
+</html>
