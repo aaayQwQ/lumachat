@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -506,7 +507,7 @@ func handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	targetURL := strings.TrimSuffix(req.BaseURL, "/") + "/models"
 	httpReq, _ := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
-	httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(req.APIKey))
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -515,8 +516,13 @@ func handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		writeErr(w, 400, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)))
+		body, _ := ioutil.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail := strings.TrimSpace(string(body))
+		if resp.StatusCode == http.StatusUnauthorized {
+			detail = "API Key 被上游拒绝（401）。请确认密钥属于该 Base URL 对应的服务商，且未失效。"
+			if strings.TrimSpace(string(body)) != "" { detail += " 上游信息: " + strings.TrimSpace(string(body)) }
+		}
+		writeErr(w, 400, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, detail))
 		return
 	}
 	writeJSON(w, 200, APIResp{Code: 0, Message: "连接成功"})
@@ -534,7 +540,7 @@ func handleFetchModels(w http.ResponseWriter, r *http.Request) {
 	}
 	targetURL := strings.TrimSuffix(req.BaseURL, "/") + "/models"
 	httpReq, _ := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
-	httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(req.APIKey))
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -542,7 +548,16 @@ func handleFetchModels(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := ioutil.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		detail := strings.TrimSpace(string(body))
+		if resp.StatusCode == http.StatusUnauthorized {
+			writeErr(w, 400, "API Key 被上游拒绝（401）。请核对服务商、Base URL 与密钥是否匹配。")
+			return
+		}
+		writeErr(w, 400, fmt.Sprintf("上游返回 HTTP %d: %s", resp.StatusCode, detail))
+		return
+	}
 	var result struct {
 		Data []struct {
 			ID string `json:"id"`
