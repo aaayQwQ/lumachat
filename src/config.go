@@ -154,6 +154,11 @@ func writeConfigAtomically(path string, data []byte, mode os.FileMode, label str
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
+		// Windows does not replace an existing destination with os.Rename.
+		if removeErr := os.Remove(path); removeErr == nil || os.IsNotExist(removeErr) {
+			if retryErr := os.Rename(tmp, path); retryErr == nil { return }
+			err = retryErr
+		}
 		_ = os.Remove(tmp)
 		log.Printf("[%s] 替换配置文件失败: %v", label, err)
 	}
