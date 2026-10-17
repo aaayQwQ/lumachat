@@ -111,6 +111,11 @@ func loadUsersUnsafe() {
 	for _, u := range loaded {
 		if u == nil { continue }
 		if u.Sessions == nil { u.Sessions = make(map[string]*ChatSession) }
+		for _, session := range u.Sessions {
+			if session != nil && len(session.Messages) > 60 {
+				session.Messages = append([]Message(nil), session.Messages[len(session.Messages)-60:]...)
+			}
+		}
 		if _, ok := u.Sessions[u.ActiveSessID]; !ok {
 			for id := range u.Sessions { u.ActiveSessID = id; break }
 		}
