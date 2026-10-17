@@ -2,56 +2,32 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**LumaChat** 是一个使用 Go 编写的轻量级、自托管 AI 聊天网页应用。它提供本地账户登录、多会话聊天、兼容 OpenAI API 的模型服务商配置，以及 SSE 流式回复。
+**LumaChat** 是一个面向开发者的轻量级、自托管 AI 聊天网页应用，使用 Go 编写。支持本地账户、多会话、流式回复，以及自行配置兼容 OpenAI Chat Completions API 的服务商。
 
-> 项目状态：这是一个可构建的基础项目，适合个人测试和自托管实验。公开部署前请先阅读下方的安全说明；目前不应将它直接暴露到公网作为多用户生产服务。
+项目**不再内置 DeepSeek 官方服务商，也不会生成默认 API Key**。服务商地址、密钥和模型 ID 都需要开发者自行配置。
 
 ## 功能
 
-- 本地注册和登录
-- 每个账户拥有独立的聊天会话
-- 支持 OpenAI 兼容接口的服务商与模型
-- SSE 流式输出
-- 通过明文 INI 文件配置服务商，修改配置后可重新加载
-- Go 标准库后端，不需要额外 Go 第三方依赖
-- GitHub Actions 自动执行格式检查、测试、静态检查和构建
+- 本地注册与登录
+- 每个账户独立的多会话聊天记录
+- 自定义 OpenAI 兼容 API 服务商
+- 基于 SSE 的流式回复
+- INI 配置文件热加载
+- 后端仅使用 Go 标准库，无需第三方 Go 模块
 
 ## 环境要求
 
 - Go 1.20 或更新版本
-- 一个兼容 OpenAI Chat Completions API 的服务端地址
-- 对应服务商的 API Key
+- 兼容 OpenAI Chat Completions API 的服务端地址
+- 服务商的模型 ID，以及接口要求时使用的 API Key
 
 ## 快速开始
 
-### 1. 获取源码
+Linux/macOS：
 
 ```sh
 git clone https://github.com/aaayQwQ/lumachat.git
 cd lumachat
-```
-
-### 2. 创建配置文件
-
-Linux/macOS：
-
-```sh
-cp config.example.ini config.ini
-```
-
-Windows PowerShell：
-
-```powershell
-Copy-Item config.example.ini config.ini
-```
-
-编辑 `config.ini`，将示例 API Key 替换成你自己的密钥。示例配置使用 DeepSeek；你也可以将其改为其他兼容 OpenAI API 的服务商。
-
-### 3. 构建和启动
-
-Linux/macOS：
-
-```sh
 go build -o lumachat ./src
 ./lumachat
 ```
@@ -59,72 +35,79 @@ go build -o lumachat ./src
 Windows PowerShell：
 
 ```powershell
+git clone https://github.com/aaayQwQ/lumachat.git
+Set-Location lumachat
 go build -o lumachat.exe ./src
 .\lumachat.exe
 ```
 
-默认监听地址为 `0.0.0.0:8080`。启动后在本机打开：
+首次启动会在**可执行文件所在目录**旁创建 `config/config.ini`，内容为空配置模板。启动网页后先注册本地账户，再进入 **设置 → 添加服务商**，填入你自己的 Base URL、API Key 和模型。若服务商支持 `/models`，可以自动获取模型；否则可以手动输入模型 ID。
 
-http://127.0.0.1:8080
+也可以在启动前先创建配置文件：
 
-如果只在本机使用，建议通过防火墙限制外部访问。若要更改监听地址或端口，请先检查当前版本源码中的服务监听设置。
+Linux/macOS：
 
-## 配置说明
-
-配置文件采用**明文、非加密 INI 格式**，文件名为 `config.ini`。仓库只包含不含真实密钥的 `config.example.ini`。
-
-示例：
-
-```ini
-[provider_deepseek]
-name=DeepSeek
-base_url=https://api.deepseek.com
-api_key=替换成你自己的API密钥
-models=deepseek-chat,deepseek-reasoner
+```sh
+mkdir -p config
+cp config.example.ini config/config.ini
 ```
 
-字段说明：
+Windows PowerShell：
 
-| 字段 | 含义 |
-|---|---|
-| section 名称 | 服务商的唯一标识，例如 `provider_deepseek` |
-| `name` | 网页界面中显示的服务商名称 |
-| `base_url` | 服务商的 API 根地址 |
-| `api_key` | 服务商 API 密钥，按明文保存 |
-| `models` | 逗号分隔的模型 ID 列表 |
+```powershell
+New-Item -ItemType Directory -Force config | Out-Null
+Copy-Item config.example.ini config/config.ini
+```
 
-不同服务商的 API 路径和模型 ID 可能不同，请以服务商文档为准。不要把带有真实密钥的 `config.ini` 上传到 GitHub、发送到公开 issue，或放入可公开下载的备份。
+编辑 `config/config.ini`，把示例 URL、模型 ID 和 API Key 替换为实际配置。
 
-## 数据文件
+## 服务商配置
 
-- `config.ini`：服务商配置，含 API 密钥，明文存储。
-- `users.json`：本地账户及相关聊天数据，由程序运行时使用。
+`config/config.ini` 是明文 INI 文件，位于可执行文件旁的 `config` 目录。修改后程序会自动重新加载。
 
-这两个运行时文件已列入 `.gitignore`。部署时仍应自行确认备份、文件权限和服务器访问控制。
+```ini
+[provider_custom]
+name=我的自定义 API
+base_url=https://api.example.com/v1
+api_key=替换成你自己的 API Key
+models=your-model-id
+thinking_switch=false
+search_extra_body=false
+```
+
+- 每个 INI 节定义一个服务商。节名是标识，实际使用的是字段值。
+- `base_url` 填 API 根地址。聊天请求会追加 `/chat/completions`，获取模型会追加 `/models`，不要把这两个路径放入 Base URL。
+- `models` 是逗号分隔的模型 ID。如果服务商没有 `/models` 接口，可在网页中手动添加模型 ID。
+- `api_key` 以明文存储；只有在你的接口不需要认证时才可以留空。
+- `thinking_switch=true` 时，才会发送非标准字段 `thinking: {type: enabled|disabled}`。服务端明确支持时再开启。
+- `search_extra_body=true` 时，在用户关闭联网搜索的情况下发送非标准字段 `extra_body.search=false`。服务端明确支持时再开启。
+
+这些服务商专用参数默认关闭，避免向普通 OpenAI 兼容接口意外发送不支持的字段。配置 API Key 时程序使用 Bearer Authorization 请求头。
+
+## 运行时数据
+
+- `config/config.ini`：自定义服务商、模型和 API Key。
+- `config/users.json`：本地账户、偏好设置与聊天历史。
+
+这两个文件均为明文，可能包含敏感数据。不要将真实配置提交到 GitHub，也不要公开包含凭据的备份。
 
 ## 检查与构建
 
 ```sh
-gofmt -w src/main.go src/types.go
+gofmt -w src/*.go
 go test ./...
 go vet ./...
 go build ./...
 ```
 
-GitHub Actions 会在推送和 Pull Request 时自动执行上述检查。
+GitHub Actions 会执行格式检查、测试、静态检查和构建。
 
-## 安全与部署注意事项
+## 安全说明
 
-1. **INI 不等于加密。** `config.ini` 中的 API Key 是明文，请限制文件系统权限；共享主机上不要让其他用户读取该文件。
-2. **不要直接裸露在公网。** 默认监听所有网卡。公网部署至少应配置 HTTPS、反向代理、访问限制和防火墙。
-3. **认证仍需加固。** 当前版本适合开发和个人测试。正式服务还应评估密码哈希算法、会话生命周期、注销与撤销机制、登录限速、CSRF/XSS 风险以及数据备份策略。
-4. **不要复用重要密码。** 测试账户请使用专用密码。
-5. **自行承担 API 费用。** 模型请求会使用你配置的服务商账户和密钥；请留意服务商的额度、价格和使用条款。
+本项目面向开发和个人自托管实验，并非已加固的公网多用户生产系统。默认监听 `0.0.0.0:8080`。公开访问前应配置 HTTPS、反向代理、访问控制和防火墙；正式部署还需复审密码哈希、会话生命周期、限速等安全措施。
+
+不要在 Issue 或日志中发布 API Key、密码、Cookie、私人聊天内容或完整的敏感配置文件。
 
 ## 许可证
 
-本项目采用 MIT License，详见 [LICENSE](LICENSE)。
-
-## 问题反馈
-
-提交 Issue 时，请附上复现步骤、Go 版本、操作系统和脱敏后的日志。**请勿发布 API Key、密码、Cookie、个人聊天记录或完整的敏感配置文件。**
+MIT，详见 [LICENSE](LICENSE)。
