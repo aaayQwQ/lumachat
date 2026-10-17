@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"strconv"
 	"time"
 )
 
@@ -97,6 +98,8 @@ func loadProvidersUnsafe() {
 		case "base_url": curr.BaseURL = v
 		case "api_key": curr.APIKey = v
 		case "models": curr.Models = append(curr.Models, strings.Split(v, ",")...)
+		case "thinking_switch": curr.ThinkingSwitch = strings.EqualFold(v, "true")
+		case "search_extra_body": curr.SearchExtraBody = strings.EqualFold(v, "true")
 		}
 	}
 	flush()
@@ -146,7 +149,9 @@ func saveConfigUnsafe() error {
 		sb.WriteString("name=" + p.Name + "\n")
 		sb.WriteString("base_url=" + p.BaseURL + "\n")
 		sb.WriteString("api_key=" + p.APIKey + "\n")
-		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\n\n")
+		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\n")
+		sb.WriteString("thinking_switch=" + strconv.FormatBool(p.ThinkingSwitch) + "\n")
+		sb.WriteString("search_extra_body=" + strconv.FormatBool(p.SearchExtraBody) + "\n\n")
 	}
 	return writeConfigAtomically(providerConfigPath(), []byte(sb.String()), 0600, "config")
 }
