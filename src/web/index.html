@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit}
 .prov-item-actions{display:flex;gap:6px;margin-top:8px}
 .empty{padding:30px;text-align:center;color:var(--sub);font-size:13px;border:1px dashed var(--border);border-radius:10px}
 .model-list{border:1px solid var(--border);border-radius:8px;padding:10px;max-height:200px;overflow-y:auto;background:var(--bg)}
-.model-item{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px}
+.model-item{display:flex;align-items:center;gap:8px;padding:5px 4px;font-size:13px}.model-item span{overflow-wrap:anywhere}
 .model-item input[type=checkbox]{width:16px;height:16px;cursor:pointer}
 #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast-item{padding:10px 20px;border-radius:8px;color:#fff;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.15);animation:fadein .2s;pointer-events:auto}
@@ -145,7 +145,7 @@ input,select,textarea{font-family:inherit}
     <div class="card-body">
       <div class="tabs">
         <button class="tab active" onclick="switchTab('providers',this)">服务商</button>
-        <button class="tab" onclick="switchTab('add-provider',this)">添加服务商</button>
+        <button class="tab" onclick="startNewProvider();switchTab('add-provider',this)">添加服务商</button>
         <button class="tab" onclick="switchTab('preferences',this)">偏好设置</button>
         <button class="tab" onclick="switchTab('account',this)">账号</button>
       </div>
@@ -156,8 +156,8 @@ input,select,textarea{font-family:inherit}
 
       <div class="tab-panel" id="tab-add-provider">
         <div class="field"><label>服务商名称</label><input type="text" id="add-name" placeholder="例如：OpenAI 官方"></div>
-        <div class="field"><label>API Base URL</label><input type="text" id="add-url" placeholder="https://api.openai.com/v1"></div>
-        <div class="field"><label>API Key</label><input type="password" id="add-key" placeholder="sk-..."></div>
+        <div class="field"><label>OpenAI 兼容 API Base URL</label><input type="text" id="add-url" placeholder="https://your-api.example/v1"></div>
+        <div class="field"><label>API Key（按服务商要求填写）</label><input type="password" id="add-key" placeholder="服务商提供的密钥；本地接口可留空"></div>
         <div class="field">
           <label>操作</label>
           <div style="display:flex;gap:8px">
@@ -166,8 +166,15 @@ input,select,textarea{font-family:inherit}
           </div>
         </div>
         <div class="field">
-          <label>模型（勾选）</label>
-          <div class="model-list" id="model-list"><div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">点击上方"获取模型列表"</div></div>
+          <label>模型 ID（勾选）</label>
+          <div class="model-list" id="model-list"><div class="empty">点击“获取模型列表”，也可以在下方手动添加模型 ID。</div></div>
+        </div>
+        <div class="field">
+          <label>手动添加模型 ID（当服务商未提供 /models 接口时使用）</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="manual-model-input" placeholder="例如：your-model-id" style="flex:1;min-width:0">
+            <button class="btn ghost sm" type="button" onclick="addManualModel()">添加模型</button>
+          </div>
         </div>
       </div>
 
@@ -198,7 +205,7 @@ input,select,textarea{font-family:inherit}
     </div>
     <div class="card-foot">
       <button class="btn ghost" onclick="closeSettings()">关闭</button>
-      <button class="btn" onclick="saveAllSettings()">保存</button>
+      <button class="btn" id="settings-save-btn" onclick="saveAllSettings()">关闭</button>
     </div>
   </div>
 </div>
@@ -366,20 +373,38 @@ async function loadUserState() {
 }
 
 async function loadProviders() {
-  var res = await fetch('/api/providers', {headers: {'X-User': currentUser, 'Authorization': 'Bearer ' + authToken}});
-  providers = await res.json();
-  renderProvSelect();
-  renderProvList();
+  try {
+    var res = await fetch('/api/providers', {headers: {'X-User': currentUser, 'Authorization': 'Bearer ' + authToken}});
+    var data = await res.json();
+    if (!res.ok || !Array.isArray(data)) throw new Error(data.message || '读取服务商列表失败');
+    providers = data;
+    renderProvSelect();
+    renderProvList();
+    syncProviderSettingsUI();
+    return true;
+  } catch (e) {
+    toast('读取服务商失败：' + (e.message || e), 'err');
+    return false;
+  }
 }
 
 function renderProvSelect() {
   var sel = document.getElementById('prov-select');
-  var cur = sel.value || (userState && userState.selected_prov);
+  if (!sel) return;
+  var cur = (userState && userState.selected_prov) || sel.value;
   sel.innerHTML = '';
-  if (!providers.length) { sel.innerHTML = '<option>无服务商</option>'; return; }
+  if (!providers.length) {
+    var empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = '未配置服务商';
+    sel.appendChild(empty);
+    renderModelSelect();
+    return;
+  }
   providers.forEach(function(p) {
     var o = document.createElement('option');
-    o.value = p.name; o.textContent = p.name;
+    o.value = p.name;
+    o.textContent = p.name;
     sel.appendChild(o);
   });
   if (cur && providers.some(function(p){ return p.name === cur; })) sel.value = cur;
@@ -387,14 +412,24 @@ function renderProvSelect() {
 }
 
 function renderModelSelect() {
-  var pName = document.getElementById('prov-select').value;
+  var provSel = document.getElementById('prov-select');
+  var pName = provSel ? provSel.value : '';
   var prov = providers.find(function(p){ return p.name === pName; });
   var mSel = document.getElementById('model-select');
-  var cur = mSel.value || (userState && userState.selected_model);
+  if (!mSel) return;
+  var cur = (userState && userState.selected_model) || mSel.value;
   mSel.innerHTML = '';
-  if (!prov || !prov.models || !prov.models.length) { mSel.innerHTML = '<option>无模型</option>'; return; }
+  if (!prov || !prov.models || !prov.models.length) {
+    var empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = '未配置模型';
+    mSel.appendChild(empty);
+    return;
+  }
   prov.models.forEach(function(m) {
-    var o = document.createElement('option'); o.value = m; o.textContent = m;
+    var o = document.createElement('option');
+    o.value = m;
+    o.textContent = m;
     mSel.appendChild(o);
   });
   if (cur && prov.models.indexOf(cur) >= 0) mSel.value = cur;
@@ -446,21 +481,39 @@ function closeRename() { document.getElementById('rename-modal').classList.add('
 async function confirmRename() {
   var title = document.getElementById('rename-input').value.trim();
   if (!title) return toast('标题不能为空', 'err');
-  await fetch('/api/session/rename', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({session_id: currentSessionForRename, title: title})});
-  userState.sessions[currentSessionForRename].title = title;
-  renderSessions(); closeRename();
+  if (Array.from(title).length > 100) return toast('标题最多100个字符', 'err');
+  try {
+    var res = await fetch('/api/session/rename', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({session_id: currentSessionForRename, title: title})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '重命名失败', 'err');
+    if (!userState.sessions[currentSessionForRename]) return toast('会话已不存在，请刷新', 'err');
+    userState.sessions[currentSessionForRename].title = title;
+    renderSessions();
+    renderChat();
+    closeRename();
+    toast('会话标题已保存', 'ok');
+  } catch (e) { toast('重命名失败：' + (e.message || e), 'err'); }
 }
 
 async function switchSession(id) {
   if (sending) return toast('请等待当前回复结束', 'err');
   if (id === userState.active_sess_id) return;
-  await fetch('/api/session/switch', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({session_id: id})});
-  userState.active_sess_id = id;
-  renderSessions(); renderChat();
+  try {
+    var res = await fetch('/api/session/switch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({session_id: id})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '切换会话失败', 'err');
+    userState.active_sess_id = id;
+    renderSessions();
+    renderChat();
+  } catch (e) { toast('切换会话失败：' + (e.message || e), 'err'); }
 }
 
 async function createSession() {
@@ -488,12 +541,21 @@ async function deleteSession(id) {
 }
 
 async function clearSession(id) {
-  await fetch('/api/session/clear', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({session_id: id})});
-  userState.sessions[id].messages = [];
-  userState.sessions[id].title = '新对话';
-  renderSessions(); renderChat();
+  try {
+    var res = await fetch('/api/session/clear', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({session_id: id})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '清空会话失败', 'err');
+    if (!userState.sessions[id]) return toast('会话已不存在，请刷新', 'err');
+    userState.sessions[id].messages = [];
+    userState.sessions[id].title = '新对话';
+    renderSessions();
+    if (userState.active_sess_id === id) renderChat();
+    toast('会话已清空', 'ok');
+  } catch (e) { toast('清空会话失败：' + (e.message || e), 'err'); }
 }
 
 function renderChat() {
@@ -540,9 +602,29 @@ function syncChatToggles() {
   if (k) { k.classList.toggle('active', tokens); k.textContent = 'Token 统计：' + (tokens ? '开' : '关'); }
 }
 async function persistSessionPrefs() {
-  var s = userState && userState.sessions[userState.active_sess_id]; if (!s) return;
-  var res = await fetch('/api/session/preferences', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({session_id:s.id,think_enabled:s.think_enabled == null ? !userState.disable_think : !!s.think_enabled,show_tokens:s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens})});
-  if (!res.ok) toast('会话设置保存失败', 'err'); syncChatToggles();
+  var s = userState && userState.sessions[userState.active_sess_id];
+  if (!s) return;
+  try {
+    var res = await fetch('/api/session/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({
+        session_id: s.id,
+        think_enabled: s.think_enabled == null ? !userState.disable_think : !!s.think_enabled,
+        show_tokens: s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) {
+      toast(data.message || '会话设置保存失败', 'err');
+      await loadUserState();
+      return;
+    }
+    syncChatToggles();
+  } catch (e) {
+    toast('会话设置保存失败：' + (e.message || e), 'err');
+    await loadUserState();
+  }
 }
 function toggleChatThink() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; var current=s.think_enabled == null ? !userState.disable_think : !!s.think_enabled; s.think_enabled=!current; persistSessionPrefs(); }
 function toggleChatTokens() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; var cur=s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens; s.show_tokens=!cur; persistSessionPrefs(); }
@@ -682,6 +764,7 @@ function openSettings() {
   syncPrefsUI();
   document.getElementById('acc-user').value = currentUser;
   document.getElementById('account-name').textContent = currentUser || '账户';
+  switchTab('providers', document.querySelector('.tab[onclick*="providers"]'));
 }
 
 function closeSettings() {
@@ -691,9 +774,17 @@ function closeSettings() {
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
   document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
-  btn.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  var panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  var saveBtn = document.getElementById('settings-save-btn');
+  if (saveBtn) {
+    if (name === 'add-provider') saveBtn.textContent = '保存服务商';
+    else if (name === 'preferences') saveBtn.textContent = '保存偏好设置';
+    else saveBtn.textContent = '关闭';
+  }
   if (name === 'providers') renderProvList();
+  if (name === 'preferences') { syncProviderSettingsUI(); syncPrefsUI(); }
 }
 
 function renderProvList() {
@@ -730,15 +821,17 @@ function renderProvList() {
 }
 
 function editProvider(name) {
-  var p = providers.find(function(x){ return x.name === name; }); if (!p) return;
+  var p = providers.find(function(x){ return x.name === name; });
+  if (!p) return;
   editingProviderName = p.name;
   document.getElementById('add-name').value = p.name;
   document.getElementById('add-url').value = p.base_url || '';
   document.getElementById('add-key').value = '';
-  document.getElementById('add-key').placeholder = '留空则保留原 API Key';
-  var list = document.getElementById('model-list'); list.innerHTML = '';
-  (p.models || []).forEach(function(model){ var label=document.createElement('label'); label.className='model-option'; var cb=document.createElement('input'); cb.type='checkbox'; cb.className='model-chk'; cb.checked=true; cb.value=model; var span=document.createElement('span'); span.textContent=model; label.appendChild(cb); label.appendChild(span); list.appendChild(label); });
-  switchTab('add-provider', document.querySelector('.tab[onclick*=\"add-provider\"]'));
+  document.getElementById('add-key').placeholder = '留空保留原 API Key；填写则替换';
+  document.getElementById('model-list').innerHTML = '';
+  (p.models || []).forEach(function(model) { addModelCheckbox(model, true); });
+  document.getElementById('manual-model-input').value = '';
+  switchTab('add-provider', document.querySelector('.tab[onclick*="add-provider"]'));
   toast('正在编辑服务商：' + name, 'info');
 }
 
@@ -749,26 +842,41 @@ function escapeHtml(s) {
 }
 
 async function deleteProvider(name) {
+  if (sending) return toast('请等待当前回复结束', 'err');
   if (!confirm('确定删除服务商"' + name + '"？')) return;
-  var res = await fetch('/api/providers/delete', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({name: name})});
-  var data = await res.json();
-  if (!res.ok) return toast(data.message || '删除失败', 'err');
-  toast('已删除', 'ok');
-  await loadProviders();
+  try {
+    var res = await fetch('/api/providers/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({name: name})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '删除失败', 'err');
+    var loaded = await loadProviders();
+    if (loaded) {
+      await loadUserState();
+      await loadProviders();
+      toast(data.message || '服务商已删除', 'ok');
+    }
+  } catch (e) { toast('删除服务商失败：' + (e.message || e), 'err'); }
 }
 
 async function testProvider() {
   var url = document.getElementById('add-url').value.trim();
   var key = document.getElementById('add-key').value.trim();
   if (!url) return toast('请填写 Base URL', 'err');
-  var res = await fetch('/api/providers/test', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({base_url: url, api_key: key})});
-  var data = await res.json();
-  if (!res.ok) return toast(data.message || '连接失败', 'err');
-  toast('连接成功', 'ok');
+  try {
+    var res = await fetch('/api/providers/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({base_url: url, api_key: key, provider_name: editingProviderName || ''})
+    });
+    var data = await res.json();
+    if (!res.ok) return toast(data.message || '连接失败（HTTP ' + res.status + '）', 'err');
+    toast(data.message || '连接成功', 'ok');
+  } catch (e) {
+    toast('测试连接失败：' + (e.message || e), 'err');
+  }
 }
 
 async function fetchModels() {
@@ -776,38 +884,117 @@ async function fetchModels() {
   var key = document.getElementById('add-key').value.trim();
   if (!url) return toast('请填写 Base URL', 'err');
   var list = document.getElementById('model-list');
-  list.innerHTML = '<div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">加载中...</div>';
-  var res = await fetch('/api/models/fetch', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify({base_url: url, api_key: key})});
-  var models = await res.json();
-  if (!res.ok) { list.innerHTML = '<div class="empty">获取失败</div>'; return; }
-  if (!models.length) { list.innerHTML = '<div class="empty">未获取到模型</div>'; return; }
-  list.innerHTML = '';
-  models.forEach(function(m) {
-    var lbl = document.createElement('label');
-    lbl.className = 'model-item';
-    lbl.innerHTML = '<input type="checkbox" class="model-chk" value="' +
-      escapeHtml(m) + '" checked> ' + escapeHtml(m);
-    list.appendChild(lbl);
-  });
+  try {
+    var res = await fetch('/api/models/fetch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({base_url: url, api_key: key, provider_name: editingProviderName || ''})
+    });
+    var models = await res.json();
+    if (!res.ok) return toast(models.message || '获取模型失败（HTTP ' + res.status + '）；可手动添加模型 ID', 'err');
+    if (!Array.isArray(models) || !models.length) return toast('接口没有返回模型；可手动添加模型 ID', 'err');
+    list.innerHTML = '';
+    models.forEach(function(model) { addModelCheckbox(model, true); });
+    toast('已获取 ' + models.length + ' 个模型', 'ok');
+  } catch (e) {
+    toast('获取模型失败：' + (e.message || e) + '；可手动添加模型 ID', 'err');
+  }
+}
+
+function addModelCheckbox(model, checked) {
+  model = String(model || '').trim();
+  if (!model) return;
+  var list = document.getElementById('model-list');
+  var old = Array.prototype.find.call(list.querySelectorAll('.model-chk'), function(c){ return c.value === model; });
+  if (old) { if (checked) old.checked = true; return; }
+  var empty = list.querySelector('.empty');
+  if (empty) list.innerHTML = '';
+  var label = document.createElement('label');
+  label.className = 'model-item';
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'model-chk';
+  checkbox.value = model;
+  checkbox.checked = checked !== false;
+  var text = document.createElement('span');
+  text.textContent = model;
+  label.appendChild(checkbox);
+  label.appendChild(text);
+  list.appendChild(label);
+}
+
+function addManualModel() {
+  var input = document.getElementById('manual-model-input');
+  var model = input.value.trim();
+  if (!model) return toast('请输入模型 ID', 'err');
+  addModelCheckbox(model, true);
+  input.value = '';
+}
+
+function startNewProvider() {
+  editingProviderName = '';
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-url').value = '';
+  document.getElementById('add-key').value = '';
+  document.getElementById('add-key').placeholder = '服务商提供的密钥；本地接口可留空';
+  document.getElementById('manual-model-input').value = '';
+  document.getElementById('model-list').innerHTML = '<div class="empty">点击“获取模型列表”，也可以在下方手动添加模型 ID。</div>';
 }
 
 async function syncProviderSettingsUI() {
-  var ps=document.getElementById('settings-prov-select'), ms=document.getElementById('settings-model-select'); if(!ps||!ms) return;
-  ps.innerHTML=''; providers.forEach(function(p){var o=document.createElement('option');o.value=p.name;o.textContent=p.name;ps.appendChild(o)});
-  if(userState && userState.selected_prov && providers.some(function(p){return p.name===userState.selected_prov})) ps.value=userState.selected_prov;
-  fillSettingsModels(userState && userState.selected_model);
+  var ps = document.getElementById('settings-prov-select');
+  var ms = document.getElementById('settings-model-select');
+  if (!ps || !ms) return;
+  var selectedProvider = userState && userState.selected_prov;
+  var selectedModel = userState && userState.selected_model;
+  ps.innerHTML = '';
+  if (!providers.length) {
+    var empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = '未配置服务商';
+    ps.appendChild(empty);
+    fillSettingsModels('');
+    return;
+  }
+  providers.forEach(function(p) {
+    var o = document.createElement('option');
+    o.value = p.name;
+    o.textContent = p.name;
+    ps.appendChild(o);
+  });
+  if (selectedProvider && providers.some(function(p){ return p.name === selectedProvider; })) ps.value = selectedProvider;
+  fillSettingsModels(selectedModel);
 }
 function fillSettingsModels(preferred) {
-  var ps=document.getElementById('settings-prov-select'), ms=document.getElementById('settings-model-select'); if(!ps||!ms) return;
-  var p=providers.find(function(x){return x.name===ps.value}); ms.innerHTML=''; (p&&p.models||[]).forEach(function(model){var o=document.createElement('option');o.value=model;o.textContent=model;ms.appendChild(o)});
-  if(preferred && p && p.models.indexOf(preferred)>=0) ms.value=preferred;
+  var ps = document.getElementById('settings-prov-select');
+  var ms = document.getElementById('settings-model-select');
+  if (!ps || !ms) return;
+  var p = providers.find(function(x){ return x.name === ps.value; });
+  ms.innerHTML = '';
+  if (!p || !p.models || !p.models.length) {
+    var empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = '未配置模型';
+    ms.appendChild(empty);
+    return;
+  }
+  p.models.forEach(function(model) {
+    var o = document.createElement('option');
+    o.value = model;
+    o.textContent = model;
+    ms.appendChild(o);
+  });
+  if (preferred && p.models.indexOf(preferred) >= 0) ms.value = preferred;
 }
 function onSettingsProvChange(){fillSettingsModels('');}
 function onSettingsModelChange(){}
 
 async function saveAllSettings() {
+  var active = document.querySelector('.tab-panel.active');
+  if (!active || active.id !== 'tab-preferences') {
+    if (active && active.id === 'tab-add-provider') return saveProviderConfig();
+    return closeSettings();
+  }
   var payload = {
     selected_prov: document.getElementById('settings-prov-select').value,
     selected_model: document.getElementById('settings-model-select').value,
@@ -815,44 +1002,96 @@ async function saveAllSettings() {
     disable_think: document.getElementById('pref-disable-think').checked,
     disable_web: document.getElementById('pref-disable-web').checked
   };
-  var settingsRes = await fetch('/api/user/settings', {method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-    body: JSON.stringify(payload)});
-  if (!settingsRes.ok) return toast('设置保存失败', 'err');
-  document.getElementById('prov-select').value = payload.selected_prov;
-  renderModelSelect();
-  document.getElementById('model-select').value = payload.selected_model;
-  userState.selected_prov = payload.selected_prov;
-  userState.selected_model = payload.selected_model;
-  userState.show_tokens = payload.show_tokens;
-  userState.disable_think = payload.disable_think;
-  userState.disable_web = payload.disable_web;
+  if (providers.length && !payload.selected_prov) return toast('请先选择服务商', 'err');
+  if (payload.selected_prov && !payload.selected_model) return toast('请先选择模型', 'err');
   var darkMode = document.getElementById('pref-dark-theme').checked;
-  applyTheme(darkMode);
-  await fetch('/api/user/theme', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({theme:darkMode?'dark':'light'})});
-  syncChatToggles();
+  try {
+    var settingsRes = await fetch('/api/user/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify(payload)
+    });
+    var settingsData = await settingsRes.json();
+    if (!settingsRes.ok) return toast(settingsData.message || '偏好设置保存失败（HTTP ' + settingsRes.status + '）', 'err');
 
+    var themeRes = await fetch('/api/user/theme', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({theme: darkMode ? 'dark' : 'light'})
+    });
+    var themeData = await themeRes.json();
+    if (!themeRes.ok) {
+      userState.selected_prov = payload.selected_prov;
+      userState.selected_model = payload.selected_model;
+      userState.show_tokens = payload.show_tokens;
+      userState.disable_think = payload.disable_think;
+      userState.disable_web = payload.disable_web;
+      return toast(themeData.message || '偏好设置已保存，但主题保存失败', 'err');
+    }
+    userState.selected_prov = payload.selected_prov;
+    userState.selected_model = payload.selected_model;
+    userState.show_tokens = payload.show_tokens;
+    userState.disable_think = payload.disable_think;
+    userState.disable_web = payload.disable_web;
+    userState.theme = darkMode ? 'dark' : 'light';
+    document.getElementById('prov-select').value = payload.selected_prov;
+    renderModelSelect();
+    document.getElementById('model-select').value = payload.selected_model;
+    applyTheme(darkMode);
+    syncPrefsUI();
+    syncChatToggles();
+    toast('偏好设置已保存', 'ok');
+    closeSettings();
+  } catch (e) {
+    toast('保存失败：' + (e.message || e), 'err');
+  }
+}
+
+async function saveProviderConfig() {
   var name = document.getElementById('add-name').value.trim();
   var url = document.getElementById('add-url').value.trim();
   var key = document.getElementById('add-key').value.trim();
   var checked = Array.prototype.slice.call(document.querySelectorAll('.model-chk:checked')).map(function(c){ return c.value; });
-  if (name && url && checked.length) {
-    var res = await fetch(editingProviderName ? '/api/providers/update' : '/api/providers/add', {method: 'POST',
+  if (!name) return toast('请填写服务商名称', 'err');
+  if (!url) return toast('请填写 Base URL', 'err');
+  if (!checked.length) return toast('至少选择或手动添加一个模型 ID', 'err');
+  var editingName = editingProviderName;
+  var endpoint = editingName ? '/api/providers/update' : '/api/providers/add';
+  var payload = editingName
+    ? {original_name: editingName, name: name, base_url: url, api_key: key, models: checked}
+    : {name: name, base_url: url, api_key: key, models: checked};
+  try {
+    var res = await fetch(endpoint, {
+      method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-      body: JSON.stringify(editingProviderName ? {original_name: editingProviderName, name: name, base_url: url, api_key: key, models: checked} : {name: name, base_url: url, api_key: key, models: checked})});
+      body: JSON.stringify(payload)
+    });
     var data = await res.json();
-    if (!res.ok) return toast(data.message || '添加失败', 'err');
-    toast(editingProviderName ? '服务商已更新' : '服务商已添加', 'ok');
+    if (!res.ok) return toast(data.message || '服务商保存失败（HTTP ' + res.status + '）', 'err');
+    if (userState && userState.selected_prov === editingName) {
+      userState.selected_prov = name;
+      if (checked.indexOf(userState.selected_model) < 0) userState.selected_model = checked[0];
+    }
+    if (userState && !userState.selected_prov) {
+      userState.selected_prov = name;
+      userState.selected_model = checked[0];
+    }
     editingProviderName = '';
-    document.getElementById('add-key').placeholder = 'sk-...';
+    document.getElementById('add-key').placeholder = '服务商提供的密钥；本地接口可留空';
     document.getElementById('add-name').value = '';
     document.getElementById('add-url').value = '';
     document.getElementById('add-key').value = '';
-    document.getElementById('model-list').innerHTML = '<div style="color:var(--sub);font-size:13px;text-align:center;padding:16px">点击上方"获取模型列表"</div>';
-    await loadProviders();
+    document.getElementById('manual-model-input').value = '';
+    document.getElementById('model-list').innerHTML = '<div class="empty">点击“获取模型列表”，也可以在下方手动添加模型 ID。</div>';
+    var loaded = await loadProviders();
+    if (loaded) {
+      renderProvSelect();
+      syncProviderSettingsUI();
+      toast(data.message || '服务商配置已保存', 'ok');
+    }
+  } catch (e) {
+    toast('服务商保存失败：' + (e.message || e), 'err');
   }
-  toast('已保存', 'ok');
-  closeSettings();
 }
 
 async function syncSettingsSilent() {
