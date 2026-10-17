@@ -1,7 +1,8 @@
 package main
 
 import (
-	"encoding/json"\n\t"fmt"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -44,7 +45,7 @@ func loadProvidersUnsafe() {
 	data, err := ioutil.ReadFile(path)
 	if os.IsNotExist(err) {
 		providers = make(map[string]Provider)
-		example := []byte("# LumaChat 自定义服务商配置\\n# 在网页设置中添加服务商，或按格式编辑本文件。\\n# Base URL 填 API 根地址，不要填 /chat/completions。\\n\\n")
+		example := []byte("# LumaChat 自定义服务商配置\n# 在网页设置中添加服务商，或按格式编辑本文件。\n# Base URL 填 API 根地址，不要填 /chat/completions。\n\n")
 		if writeErr := writeConfigAtomically(path, example, 0600, "config"); writeErr != nil {
 			log.Printf("[config] 初始化配置文件失败: %v", writeErr)
 			return
@@ -58,7 +59,7 @@ func loadProvidersUnsafe() {
 	}
 
 	newProviders := make(map[string]Provider)
-	lines := strings.Split(string(data), "\\n")
+	lines := strings.Split(string(data), "\n")
 	var curr *Provider
 	flush := func() {
 		if curr == nil { return }
@@ -138,14 +139,14 @@ func loadUsersUnsafe() {
 func saveConfigUnsafe() error {
 	if err := ensureConfigDir(); err != nil { return err }
 	var sb strings.Builder
-	sb.WriteString("# LumaChat v" + version + " 自定义服务商配置\\n")
-	sb.WriteString("# 修改后约 2 秒内自动热加载\\n\\n")
+	sb.WriteString("# LumaChat v" + version + " 自定义服务商配置\n")
+	sb.WriteString("# 修改后约 2 秒内自动热加载\n\n")
 	for _, p := range providers {
-		sb.WriteString("[provider]\\n")
-		sb.WriteString("name=" + p.Name + "\\n")
-		sb.WriteString("base_url=" + p.BaseURL + "\\n")
-		sb.WriteString("api_key=" + p.APIKey + "\\n")
-		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\\n\\n")
+		sb.WriteString("[provider]\n")
+		sb.WriteString("name=" + p.Name + "\n")
+		sb.WriteString("base_url=" + p.BaseURL + "\n")
+		sb.WriteString("api_key=" + p.APIKey + "\n")
+		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\n\n")
 	}
 	return writeConfigAtomically(providerConfigPath(), []byte(sb.String()), 0600, "config")
 }
