@@ -122,16 +122,31 @@ func handleChangePassword(w http.ResponseWriter, r *http.Request) {
 func handleUserState(w http.ResponseWriter, r *http.Request) {
 	username := r.Header.Get("X-User")
 	mu.RLock()
-	u, exists := users[username]
-	if !exists {
+	user, exists := users[username]
+	if !exists || user == nil {
 		mu.RUnlock()
-		writeErr(w, 401, "未授权")
+		writeErr(w, http.StatusUnauthorized, "未授权")
 		return
 	}
-	data, _ := json.Marshal(u)
+	// Never expose password hashes to the browser; the stored User model is also used for persistence.
+	view := struct {
+		Username string `json:"username"`
+		Sessions map[string]*ChatSession `json:"sessions"`
+		ActiveSessID string `json:"active_sess_id"`
+		ShowTokens bool `json:"show_tokens"`
+		SelectedProv string `json:"selected_prov"`
+		SelectedModel string `json:"selected_model"`
+		DisableThink bool `json:"disable_think"`
+		DisableWeb bool `json:"disable_web"`
+		Theme string `json:"theme"`
+		CreatedAt time.Time `json:"created_at"`
+	}{
+		Username: user.Username, Sessions: user.Sessions, ActiveSessID: user.ActiveSessID,
+		ShowTokens: user.ShowTokens, SelectedProv: user.SelectedProv, SelectedModel: user.SelectedModel,
+		DisableThink: user.DisableThink, DisableWeb: user.DisableWeb, Theme: user.Theme, CreatedAt: user.CreatedAt,
+	}
 	mu.RUnlock()
-	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(data)
+	writeJSON(w, http.StatusOK, view)
 }
 
 func handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
