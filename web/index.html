@@ -13,7 +13,7 @@
 [data-theme="dark"]{--bg:#000;--surface:#000;--text:#e8eaed;--sub:#9aa0a6;--border:#252525;--hover:#171717}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{font-family:inherit;background:var(--bg);color:var(--text);display:flex;overflow:hidden;font-size:14px;zoom:1.1}
+body{font-family:sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden;font-size:14px;zoom:1.1}
 button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(4px)}
@@ -172,6 +172,7 @@ input,select,textarea{font-family:inherit}
       </div>
 
       <div class="tab-panel" id="tab-preferences">
+        <div class="field" style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="pref-dark-theme" style="width:18px;height:18px"><label for="pref-dark-theme" style="margin:0">纯黑暗色模式</label></div>
         <div class="field"><label>默认服务商</label><select id="settings-prov-select" onchange="onSettingsProvChange()"></select></div>
         <div class="field"><label>默认模型</label><select id="settings-model-select" onchange="onSettingsModelChange()"></select></div>
         <div class="field" style="display:flex;align-items:center;gap:10px">
@@ -810,6 +811,10 @@ function onSettingsModelChange(){}
   userState.show_tokens = payload.show_tokens;
   userState.disable_think = payload.disable_think;
   userState.disable_web = payload.disable_web;
+  var darkMode = document.getElementById('pref-dark-theme').checked;
+  applyTheme(darkMode);
+  await fetch('/api/user/theme', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({theme:darkMode?'dark':'light'})});
+  syncChatToggles();
 
   var name = document.getElementById('add-name').value.trim();
   var url = document.getElementById('add-url').value.trim();
@@ -853,6 +858,7 @@ async function syncSettingsSilent() {
 function syncPrefsUI() {
   if (!userState) return;
   document.getElementById('pref-show-tokens').checked = !!userState.show_tokens;
+  document.getElementById('pref-dark-theme').checked = document.documentElement.getAttribute('data-theme') === 'dark';
   document.getElementById('pref-disable-think').checked = !!userState.disable_think;
   document.getElementById('pref-disable-web').checked = !!userState.disable_web;
 }
