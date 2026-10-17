@@ -15,7 +15,25 @@ func configDirPath() string { return filepath.Join(exeDir(), "config") }
 func providerConfigPath() string { return filepath.Join(configDirPath(), "config.ini") }
 func userDataPath() string { return filepath.Join(configDirPath(), "users.json") }
 
-func ensureConfigDir() error { return os.MkdirAll(configDirPath(), 0700) }
+func ensureConfigDir() error {
+	dir := configDirPath()
+	if err := os.MkdirAll(dir, 0700); err != nil { return err }
+	// One-time migration from older releases that wrote data beside the executable.
+	for _, name := range []string{"config.ini", "users.json"} {
+		dst := filepath.Join(dir, name)
+		if _, err := os.Stat(dst); err == nil { continue }
+		src := filepath.Join(exeDir(), name)
+		if _, err := os.Stat(src); err != nil { continue }
+		if err := os.Rename(src, dst); err != nil {
+			data, readErr := ioutil.ReadFile(src)
+			if readErr != nil { log.Printf("[config] 旧文件迁移失败 %s: %v", name, readErr); continue }
+			if writeErr := ioutil.WriteFile(dst, data, 0600); writeErr != nil {
+				log.Printf("[config] 旧文件迁移失败 %s: %v", name, writeErr)
+			}
+		}
+	}
+	return nil
+}
 
 func loadProvidersUnsafe() {
 	if err := ensureConfigDir(); err != nil {
