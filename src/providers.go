@@ -129,7 +129,17 @@ func handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
 	oldSelections := make(map[string]selection)
 	for name, u := range users { if u != nil { oldSelections[name] = selection{u.SelectedProv, u.SelectedModel} } }
 	delete(providers, req.Name)
-	for _, u := range users { if u != nil && u.SelectedProv == req.Name { u.SelectedProv = ""; u.SelectedModel = "" } }
+	for _, u := range users {
+		if u != nil && u.SelectedProv == req.Name {
+			u.SelectedProv, u.SelectedModel = "", ""
+			for name, remaining := range providers {
+				if len(remaining.Models) > 0 {
+					u.SelectedProv, u.SelectedModel = name, remaining.Models[0]
+					break
+				}
+			}
+		}
+	}
 	if err := saveConfigUnsafe(); err != nil {
 		providers[req.Name] = old
 		for name, saved := range oldSelections { if u := users[name]; u != nil { u.SelectedProv, u.SelectedModel = saved.prov, saved.model } }
@@ -154,7 +164,7 @@ func handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	req.ProviderName = strings.TrimSpace(req.ProviderName)
 	if req.APIKey == "" && req.ProviderName != "" {
 		mu.RLock()
-		if p, ok := providers[req.ProviderName]; ok && strings.TrimRight(strings.TrimSpace(p.BaseURL), "/") == req.BaseURL { req.APIKey = p.APIKey }
+		if p, ok := providers[req.ProviderName]; ok { req.APIKey = p.APIKey }
 		mu.RUnlock()
 	}
 	if !validBaseURL(req.BaseURL) { writeErr(w, 400, "请填写有效的 Base URL（http:// 或 https://）"); return }
