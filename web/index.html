@@ -172,6 +172,8 @@ input,select,textarea{font-family:inherit}
       </div>
 
       <div class="tab-panel" id="tab-preferences">
+        <div class="field"><label>默认服务商</label><select id="settings-prov-select" onchange="onSettingsProvChange()"></select></div>
+        <div class="field"><label>默认模型</label><select id="settings-model-select" onchange="onSettingsModelChange()"></select></div>
         <div class="field" style="display:flex;align-items:center;gap:10px">
           <input type="checkbox" id="pref-show-tokens" style="width:18px;height:18px">
           <label for="pref-show-tokens" style="margin:0">显示 Token 消耗统计</label>
@@ -515,7 +517,7 @@ function appendMessageBubble(role, content) {
 
 function syncChatToggles() {
   var s = userState && userState.sessions[userState.active_sess_id];
-  var think = !!(s && s.think_enabled);
+  var think = s && s.think_enabled != null ? !!s.think_enabled : !!(userState && !userState.disable_think);
   var tokens = s && s.show_tokens != null ? !!s.show_tokens : !!(userState && userState.show_tokens);
   var t = document.getElementById('chat-think-toggle'), k = document.getElementById('chat-token-toggle');
   if (t) { t.classList.toggle('active', think); t.textContent = '✧ 思考模式：' + (think ? '开' : '关'); t.title = '本对话单独控制思考模式'; }
@@ -523,10 +525,10 @@ function syncChatToggles() {
 }
 async function persistSessionPrefs() {
   var s = userState && userState.sessions[userState.active_sess_id]; if (!s) return;
-  var res = await fetch('/api/session/preferences', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({session_id:s.id,think_enabled:!!s.think_enabled,show_tokens:s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens})});
+  var res = await fetch('/api/session/preferences', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({session_id:s.id,think_enabled:s.think_enabled == null ? !userState.disable_think : !!s.think_enabled,show_tokens:s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens})});
   if (!res.ok) toast('会话设置保存失败', 'err'); syncChatToggles();
 }
-function toggleChatThink() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; s.think_enabled=!s.think_enabled; persistSessionPrefs(); }
+function toggleChatThink() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; var current=s.think_enabled == null ? !userState.disable_think : !!s.think_enabled; s.think_enabled=!current; persistSessionPrefs(); }
 function toggleChatTokens() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; var cur=s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens; s.show_tokens=!cur; persistSessionPrefs(); }
 function toggleSidebar() { document.body.classList.toggle('sidebar-collapsed'); }
 
@@ -574,7 +576,7 @@ async function sendMessage() {
     var res = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-      body: JSON.stringify({session_id: s.id, prompt: txt, think_enabled: !!s.think_enabled, show_tokens: (s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens)}),
+      body: JSON.stringify({session_id: s.id, prompt: txt, think_enabled: (s.think_enabled == null ? !userState.disable_think : !!s.think_enabled), show_tokens: (s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens)}),
       signal: abortCtrl.signal
     });
     if (!res.ok) {
@@ -660,6 +662,7 @@ async function sendMessage() {
 function openSettings() {
   document.getElementById('settings-modal').classList.remove('hidden');
   renderProvList();
+  syncProviderSettingsUI();
   syncPrefsUI();
   document.getElementById('acc-user').value = currentUser;
   document.getElementById('account-name').textContent = currentUser || '账户';
@@ -774,17 +777,36 @@ async function fetchModels() {
   });
 }
 
-async function saveAllSettings() {
+async function syncProviderSettingsUI() {
+  var ps=document.getElementById('settings-prov-select'), ms=document.getElementById('settings-model-select'); if(!ps||!ms) return;
+  ps.innerHTML=''; providers.forEach(function(p){var o=document.createElement('option');o.value=p.name;o.textContent=p.name;ps.appendChild(o)});
+  if(userState && userState.selected_prov && providers.some(function(p){return p.name===userState.selected_prov})) ps.value=userState.selected_prov;
+  fillSettingsModels(userState && userState.selected_model);
+}
+function fillSettingsModels(preferred) {
+  var ps=document.getElementById('settings-prov-select'), ms=document.getElementById('settings-model-select'); if(!ps||!ms) return;
+  var p=providers.find(function(x){return x.name===ps.value}); ms.innerHTML=''; (p&&p.models||[]).forEach(function(model){var o=document.createElement('option');o.value=model;o.textContent=model;ms.appendChild(o)});
+  if(preferred && p && p.models.indexOf(preferred)>=0) ms.value=preferred;
+}
+function onSettingsProvChange(){fillSettingsModels('');}
+function onSettingsModelChange(){}
+\nfunction saveAllSettings() {
   var payload = {
-    selected_prov: document.getElementById('prov-select').value,
-    selected_model: document.getElementById('model-select').value,
+    selected_prov: document.getElementById('settings-prov-select').value,
+    selected_model: document.getElementById('settings-model-select').value,
     show_tokens: document.getElementById('pref-show-tokens').checked,
     disable_think: document.getElementById('pref-disable-think').checked,
     disable_web: document.getElementById('pref-disable-web').checked
   };
-  await fetch('/api/user/settings', {method: 'POST',
+  var settingsRes = await fetch('/api/user/settings', {method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
     body: JSON.stringify(payload)});
+  if (!settingsRes.ok) return toast('设置保存失败', 'err');
+  document.getElementById('prov-select').value = payload.selected_prov;
+  renderModelSelect();
+  document.getElementById('model-select').value = payload.selected_model;
+  userState.selected_prov = payload.selected_prov;
+  userState.selected_model = payload.selected_model;
   userState.show_tokens = payload.show_tokens;
   userState.disable_think = payload.disable_think;
   userState.disable_web = payload.disable_web;
