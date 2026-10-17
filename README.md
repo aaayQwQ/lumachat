@@ -1,108 +1,106 @@
 # LumaChat
 
-[简体中文](README.md) | [English](README.en.md)
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-**LumaChat** 是一个使用 Go 编写的轻量级、自托管 AI 聊天网页应用。它提供本地账户登录、多会话聊天、兼容 OpenAI API 的模型服务商配置，以及 SSE 流式回复。
+**LumaChat** is a lightweight, self-hosted AI chat web application written in Go. It provides local account login, multi-conversation chat, OpenAI-compatible model provider configuration, and streaming responses over Server-Sent Events (SSE).
 
-> 项目状态：这是一个可构建的基础项目，适合个人测试和自托管实验。公开部署前请先阅读下方的安全说明；目前不应将它直接暴露到公网作为多用户生产服务。
+> **Project status:** This is a buildable foundation intended for personal testing and self-hosting experiments. Read the security notes below before exposing it to a network. It should not currently be exposed directly to the public internet as a production multi-user service.
 
-## 功能
+## Features
 
-- 本地注册和登录
-- 每个账户拥有独立的聊天会话
-- 支持 OpenAI 兼容接口的服务商与模型
-- SSE 流式输出
-- 通过明文 INI 文件配置服务商，修改配置后可重新加载
-- Go 标准库后端，不需要额外 Go 第三方依赖
-- GitHub Actions 自动执行格式检查、测试、静态检查和构建
+- Local user registration and login
+- Separate chat conversations for each account
+- Support for providers and models compatible with the OpenAI API
+- SSE streaming responses
+- Provider configuration through a plain-text INI file
+- Backend uses the Go standard library and requires no third-party Go modules
+- GitHub Actions checks formatting, tests, static analysis, and builds
 
-## 环境要求
+## Requirements
 
-- Go 1.20 或更新版本
-- 一个兼容 OpenAI Chat Completions API 的服务端地址
-- 对应服务商的 API Key
+- Go 1.20 or later
+- An API endpoint compatible with the OpenAI Chat Completions API
+- An API key for the selected provider
 
-## 快速开始
+## Quick start
 
-### 1. 获取源码
+### 1. Clone the repository
 
 ```sh
 git clone https://github.com/aaayQwQ/lumachat.git
 cd lumachat
 ```
 
-### 2. 创建配置文件
+### 2. Create the configuration file
 
-Linux/macOS：
+Linux/macOS:
 
 ```sh
 cp config.example.ini config.ini
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 Copy-Item config.example.ini config.ini
 ```
 
-编辑 `config.ini`，将示例 API Key 替换成你自己的密钥。示例配置使用 DeepSeek；你也可以将其改为其他兼容 OpenAI API 的服务商。
+Edit `config.ini` and replace the example API key with your own. The example configuration uses DeepSeek; you can adapt it for another OpenAI-compatible provider.
 
-### 3. 构建和启动
+### 3. Build and run
 
-Linux/macOS：
+Linux/macOS:
 
 ```sh
 go build -o lumachat .
 ./lumachat
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
 go build -o lumachat.exe .
 .\lumachat.exe
 ```
 
-默认监听地址为 `0.0.0.0:8080`。启动后在本机打开：
+The default listen address is `0.0.0.0:8080`. After startup, open this URL in your browser:
 
 http://127.0.0.1:8080
 
-如果只在本机使用，建议通过防火墙限制外部访问。若要更改监听地址或端口，请先检查当前版本源码中的服务监听设置。
+If you only intend to use the application locally, restrict external access with your firewall. To change the listen address or port, check the server listener settings in the source code for the version you are running.
 
-## 配置说明
+## Configuration
 
-配置文件采用**明文、非加密 INI 格式**，文件名为 `config.ini`。仓库只包含不含真实密钥的 `config.example.ini`。
+The application uses a **plain-text, unencrypted INI file** named `config.ini`. The repository includes `config.example.ini`, which should not contain real credentials.
 
-示例：
+Example:
 
 ```ini
 [provider_deepseek]
 name=DeepSeek
 base_url=https://api.deepseek.com
-api_key=替换成你自己的API密钥
+api_key=replace_with_your_own_api_key
 models=deepseek-chat,deepseek-reasoner
 ```
 
-字段说明：
-
-| 字段 | 含义 |
+| Field | Description |
 |---|---|
-| section 名称 | 服务商的唯一标识，例如 `provider_deepseek` |
-| `name` | 网页界面中显示的服务商名称 |
-| `base_url` | 服务商的 API 根地址 |
-| `api_key` | 服务商 API 密钥，按明文保存 |
-| `models` | 逗号分隔的模型 ID 列表 |
+| Section name | Unique provider identifier, such as `provider_deepseek` |
+| `name` | Provider name displayed in the web interface |
+| `base_url` | Provider API base URL |
+| `api_key` | Provider API key, stored as plain text |
+| `models` | Comma-separated list of model IDs |
 
-不同服务商的 API 路径和模型 ID 可能不同，请以服务商文档为准。不要把带有真实密钥的 `config.ini` 上传到 GitHub、发送到公开 issue，或放入可公开下载的备份。
+API paths and model IDs vary by provider. Refer to the provider's official documentation. Never commit a real `config.ini`, publish it in a public issue, or include it in a publicly downloadable backup.
 
-## 数据文件
+## Runtime data files
 
-- `config.ini`：服务商配置，含 API 密钥，明文存储。
-- `users.json`：本地账户及相关聊天数据，由程序运行时使用。
+- `config.ini`: provider configuration, including API keys stored in plain text.
+- `users.json`: local account and related chat data used by the application.
 
-这两个运行时文件已列入 `.gitignore`。部署时仍应自行确认备份、文件权限和服务器访问控制。
+Both runtime files are listed in `.gitignore`. You are still responsible for backups, file permissions, and access controls on the host.
 
-## 检查与构建
+## Checks and build
 
 ```sh
 gofmt -w main.go types.go
@@ -111,20 +109,20 @@ go vet ./...
 go build ./...
 ```
 
-GitHub Actions 会在推送和 Pull Request 时自动执行上述检查。
+GitHub Actions runs these checks on pushes and pull requests.
 
-## 安全与部署注意事项
+## Security and deployment notes
 
-1. **INI 不等于加密。** `config.ini` 中的 API Key 是明文，请限制文件系统权限；共享主机上不要让其他用户读取该文件。
-2. **不要直接裸露在公网。** 默认监听所有网卡。公网部署至少应配置 HTTPS、反向代理、访问限制和防火墙。
-3. **认证仍需加固。** 当前版本适合开发和个人测试。正式服务还应评估密码哈希算法、会话生命周期、注销与撤销机制、登录限速、CSRF/XSS 风险以及数据备份策略。
-4. **不要复用重要密码。** 测试账户请使用专用密码。
-5. **自行承担 API 费用。** 模型请求会使用你配置的服务商账户和密钥；请留意服务商的额度、价格和使用条款。
+1. **INI is not encryption.** API keys in `config.ini` are stored as plain text. Restrict filesystem permissions, especially on shared hosts.
+2. **Do not expose the application directly to the public internet.** It listens on all network interfaces by default. A public deployment should use HTTPS, a reverse proxy, access restrictions, and a firewall.
+3. **Authentication needs further hardening.** This version is intended for development and personal testing. Before production use, review password hashing, session lifetime, logout and token revocation, login rate limiting, CSRF/XSS risks, and backup procedures.
+4. **Do not reuse important passwords.** Use a dedicated password for test accounts.
+5. **You are responsible for API charges.** Requests use the provider account and API key you configure. Check the provider's quotas, pricing, and terms.
 
-## 许可证
+## License
 
-本项目采用 MIT License，详见 [LICENSE](LICENSE)。
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
-## 问题反馈
+## Reporting issues
 
-提交 Issue 时，请附上复现步骤、Go 版本、操作系统和脱敏后的日志。**请勿发布 API Key、密码、Cookie、个人聊天记录或完整的敏感配置文件。**
+When opening an issue, include reproduction steps, your Go version, operating system, and sanitized logs. **Do not post API keys, passwords, cookies, private chat history, or complete sensitive configuration files.**
