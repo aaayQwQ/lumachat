@@ -41,6 +41,8 @@ type ChatSession struct {
 	Messages  []Message `json:"messages"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	ThinkEnabled *bool `json:"think_enabled,omitempty"`
+	ShowTokens *bool `json:"show_tokens,omitempty"`
 }
 
 type User struct {
