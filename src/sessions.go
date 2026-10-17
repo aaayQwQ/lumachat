@@ -81,37 +81,21 @@ func handleRenameSession(w http.ResponseWriter, r *http.Request) {
 
 func handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 	username := r.Header.Get("X-User")
-	var req struct {
-		SessionID string `json:"session_id"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	var req struct { SessionID string `json:"session_id"` }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
 	mu.Lock()
 	u, ok := users[username]
-	if !ok {
-		mu.Unlock()
-		writeErr(w, 401, "未授权")
-		return
-	}
-	if _, exists := u.Sessions[req.SessionID]; !exists {
-		mu.Unlock()
-		writeErr(w, 404, "会话不存在")
-		return
-	}
-	if len(u.Sessions) <= 1 {
-		mu.Unlock()
-		writeErr(w, 400, "至少保留一个会话")
-		return
-	}
+	if !ok { mu.Unlock(); writeErr(w, 401, "未授权"); return }
+	if _, exists := u.Sessions[req.SessionID]; !exists { mu.Unlock(); writeErr(w, 404, "会话不存在"); return }
+	if len(u.Sessions) <= 1 { mu.Unlock(); writeErr(w, 400, "至少保留一个会话"); return }
 	delete(u.Sessions, req.SessionID)
 	if u.ActiveSessID == req.SessionID {
-		for id := range u.Sessions {
-			u.ActiveSessID = id
-			break
-		}
+		u.ActiveSessID = ""
+		for id := range u.Sessions { u.ActiveSessID = id; break }
 	}
 	mu.Unlock()
 	saveUsersDebounced()
-	writeJSON(w, 200, APIResp{Code: 0})
+	writeJSON(w, 200, APIResp{Code: 0, Message: "会话已删除"})
 }
 
 func handleClearSession(w http.ResponseWriter, r *http.Request) {
