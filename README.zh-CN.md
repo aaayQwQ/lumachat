@@ -52,14 +52,14 @@ Copy-Item config.example.ini config.ini
 Linux/macOS：
 
 ```sh
-go build -o lumachat .
+go build -o lumachat ./src
 ./lumachat
 ```
 
 Windows PowerShell：
 
 ```powershell
-go build -o lumachat.exe .
+go build -o lumachat.exe ./src
 .\lumachat.exe
 ```
 
@@ -105,7 +105,7 @@ models=deepseek-chat,deepseek-reasoner
 ## 检查与构建
 
 ```sh
-gofmt -w main.go types.go
+gofmt -w src/main.go src/types.go
 go test ./...
 go vet ./...
 go build ./...

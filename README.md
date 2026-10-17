@@ -52,14 +52,14 @@ Edit `config.ini` and replace the example API key with your own. The example con
 Linux/macOS:
 
 ```sh
-go build -o lumachat .
+go build -o lumachat ./src
 ./lumachat
 ```
 
 Windows PowerShell:
 
 ```powershell
-go build -o lumachat.exe .
+go build -o lumachat.exe ./src
 .\lumachat.exe
 ```
 
@@ -103,7 +103,7 @@ Both runtime files are listed in `.gitignore`. You are still responsible for bac
 ## Checks and build
 
 ```sh
-gofmt -w main.go types.go
+gofmt -w src/main.go src/types.go
 go test ./...
 go vet ./...
 go build ./...
