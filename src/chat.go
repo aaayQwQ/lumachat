@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"sync"
@@ -144,7 +145,7 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		detail, _ := ioutil.ReadAll(io.LimitReader(resp.Body, 4096))
 		msg := fmt.Sprintf("上游返回 HTTP %d", resp.StatusCode)
 		if resp.StatusCode == http.StatusUnauthorized {
 			msg = "API Key 认证失败（HTTP 401）：请检查密钥是否有效，并确认 Base URL 与密钥来自同一服务商。"
