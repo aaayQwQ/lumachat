@@ -17,6 +17,8 @@ type Provider struct {
 	BaseURL   string    `json:"base_url"`
 	APIKey    string    `json:"api_key"`
 	Models    []string  `json:"models"`
+	ThinkingSwitch bool `json:"thinking_switch"`
+	SearchExtraBody bool `json:"search_extra_body"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
