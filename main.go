@@ -796,16 +796,14 @@ func handleChatStream(w http.ResponseWriter, r *http.Request) {
 		"stream":         true,
 		"stream_options": map[string]interface{}{"include_usage": true},
 	}
+	// DeepSeek-style OpenAI-compatible APIs use a top-level thinking switch.
+	thinkType := "enabled"
+	if disableThink { thinkType = "disabled" }
+	openaiReq["thinking"] = map[string]string{"type": thinkType}
+	// Keep provider-specific search controls separate from the thinking switch.
 	opts := map[string]interface{}{}
-	if disableThink {
-		opts["reasoning"] = false
-	}
-	if disableWeb {
-		opts["search"] = false
-	}
-	if len(opts) > 0 {
-		openaiReq["extra_body"] = opts
-	}
+	if disableWeb { opts["search"] = false }
+	if len(opts) > 0 { openaiReq["extra_body"] = opts }
 
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
