@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"bufio"
 	"bytes"
 	"context"
@@ -121,18 +120,11 @@ func clientIP(r *http.Request) string {
 
 // ==================== 内嵌网页模板 ====================
 
-//go:embed web/index.html
-var embeddedHTML embed.FS
-
 var htmlTemplate string
 
 func loadTemplate() {
-	data, err := embeddedHTML.ReadFile("web/index.html")
-	if err != nil {
-		log.Fatalf("[web] 读取内嵌页面失败: %v", err)
-	}
-	htmlTemplate = string(data)
-	log.Printf("[web] 已加载内嵌模板 (%d 字节)", len(data))
+	htmlTemplate = htmlTemplateContent
+	log.Printf("[web] 已加载内嵌模板 (%d 字节)", len(htmlTemplate))
 }
 
 func exeDir() string {
