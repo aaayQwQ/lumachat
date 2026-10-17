@@ -239,24 +239,39 @@ input,select,textarea{font-family:inherit}
 <div id="toast"></div>
 
 <script>
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-  highlight: function(code, lang) {
-    try {
-      if (lang && hljs.getLanguage(lang)) {
-        return hljs.highlight(code, {language: lang, ignoreIllegals: true}).value;
-      }
-      return hljs.highlightAuto(code).value;
-    } catch(e) {
-      return code.replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; });
+if (typeof marked !== 'undefined' && typeof marked.setOptions === 'function') {
+  marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: function(code, lang) {
+      try {
+        if (typeof hljs !== 'undefined') {
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, {language: lang, ignoreIllegals: true}).value;
+          }
+          return hljs.highlightAuto(code).value;
+        }
+      } catch(e) {}
+      return String(code).replace(/[&<>]/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];
+      });
     }
-  }
-});
+  });
+}
 
 function renderMarkdown(text) {
   if (!text) return '';
-  return DOMPurify.sanitize(marked.parse(text), {ADD_ATTR: ['target']});
+  var html;
+  if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
+    html = marked.parse(text);
+  } else {
+    html = '<pre style="white-space:pre-wrap">' + String(text).replace(/[&<>]/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];
+    }) + '</pre>';
+  }
+  return typeof DOMPurify !== 'undefined' && typeof DOMPurify.sanitize === 'function'
+    ? DOMPurify.sanitize(html, {ADD_ATTR: ['target']})
+    : html;
 }
 
 function decorateCodeBlocks(container) {
