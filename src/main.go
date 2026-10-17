@@ -124,8 +124,9 @@ var htmlTemplate string
 
 func loadTemplate() {
 	candidates := []string{
-		"src/web/index.html",
+		filepath.Join(exeDir(), "src", "web", "index.html"),
 		filepath.Join(exeDir(), "web", "index.html"),
+		"src/web/index.html",
 		"index.html",
 		filepath.Join(exeDir(), "index.html"),
 	}
