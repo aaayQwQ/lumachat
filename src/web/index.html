@@ -158,6 +158,14 @@ input,select,textarea{font-family:inherit}
         <div class="field"><label>服务商名称</label><input type="text" id="add-name" placeholder="例如：OpenAI 官方"></div>
         <div class="field"><label>OpenAI 兼容 API Base URL</label><input type="text" id="add-url" placeholder="https://your-api.example/v1"></div>
         <div class="field"><label>API Key（按服务商要求填写）</label><input type="password" id="add-key" placeholder="服务商提供的密钥；本地接口可留空"></div>
+        <div class="field" style="display:flex;align-items:flex-start;gap:10px">
+          <input type="checkbox" id="add-thinking-switch" style="width:18px;height:18px;flex:0 0 auto">
+          <label for="add-thinking-switch" style="margin:0">此接口支持非标准 thinking.type 开关（默认关闭，兼容性更好）</label>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-start;gap:10px">
+          <input type="checkbox" id="add-search-extra-body" style="width:18px;height:18px;flex:0 0 auto">
+          <label for="add-search-extra-body" style="margin:0">此接口支持 extra_body.search 参数（用于屏蔽联网搜索）</label>
+        </div>
         <div class="field">
           <label>操作</label>
           <div style="display:flex;gap:8px">
@@ -807,6 +815,7 @@ function renderProvList() {
       '<div class="prov-item-body">' +
         '<div>URL: ' + escapeHtml(p.base_url || '') + '</div>' +
         '<div>Key: ' + escapeHtml(p.api_key || '') + '</div>' +
+        '<div>thinking 开关: ' + (p.thinking_switch ? '启用' : '关闭') + '；extra_body.search: ' + (p.search_extra_body ? '启用' : '关闭') + '</div>' +
         '<div>模型: ' + modelList + '</div>' +
       '</div>' +
       '<div class="prov-item-actions">' +
@@ -831,6 +840,8 @@ function editProvider(name) {
   document.getElementById('model-list').innerHTML = '';
   (p.models || []).forEach(function(model) { addModelCheckbox(model, true); });
   document.getElementById('manual-model-input').value = '';
+  document.getElementById('add-thinking-switch').checked = !!p.thinking_switch;
+  document.getElementById('add-search-extra-body').checked = !!p.search_extra_body;
   switchTab('add-provider', document.querySelector('.tab[onclick*="add-provider"]'));
   toast('正在编辑服务商：' + name, 'info');
 }
@@ -938,6 +949,8 @@ function startNewProvider() {
   document.getElementById('add-key').value = '';
   document.getElementById('add-key').placeholder = '服务商提供的密钥；本地接口可留空';
   document.getElementById('manual-model-input').value = '';
+  document.getElementById('add-thinking-switch').checked = false;
+  document.getElementById('add-search-extra-body').checked = false;
   document.getElementById('model-list').innerHTML = '<div class="empty">点击“获取模型列表”，也可以在下方手动添加模型 ID。</div>';
 }
 
@@ -1058,8 +1071,8 @@ async function saveProviderConfig() {
   var editingName = editingProviderName;
   var endpoint = editingName ? '/api/providers/update' : '/api/providers/add';
   var payload = editingName
-    ? {original_name: editingName, name: name, base_url: url, api_key: key, models: checked}
-    : {name: name, base_url: url, api_key: key, models: checked};
+    ? {original_name: editingName, name: name, base_url: url, api_key: key, models: checked, thinking_switch: document.getElementById('add-thinking-switch').checked, search_extra_body: document.getElementById('add-search-extra-body').checked}
+    : {name: name, base_url: url, api_key: key, models: checked, thinking_switch: document.getElementById('add-thinking-switch').checked, search_extra_body: document.getElementById('add-search-extra-body').checked};
   try {
     var res = await fetch(endpoint, {
       method: 'POST',
@@ -1082,6 +1095,8 @@ async function saveProviderConfig() {
     document.getElementById('add-url').value = '';
     document.getElementById('add-key').value = '';
     document.getElementById('manual-model-input').value = '';
+    document.getElementById('add-thinking-switch').checked = false;
+    document.getElementById('add-search-extra-body').checked = false;
     document.getElementById('model-list').innerHTML = '<div class="empty">点击“获取模型列表”，也可以在下方手动添加模型 ID。</div>';
     var loaded = await loadProviders();
     if (loaded) {
