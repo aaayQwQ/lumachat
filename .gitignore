@@ -1,0 +1,6 @@
+config.ini
+users.json
+*.exe
+*.test
+*.out
+.DS_Store
