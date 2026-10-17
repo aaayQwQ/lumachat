@@ -4,3 +4,4 @@ users.json
 *.test
 *.out
 .DS_Store
+config/
