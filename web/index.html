@@ -10,10 +10,10 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 <style>
 :root{--blue:#1a73e8;--bg:#f8f9fa;--surface:#fff;--text:#202124;--sub:#5f6368;--border:#dadce0;--danger:#d93025;--ok:#34a853;--hover:#f1f3f4}
-[data-theme="dark"]{--bg:#1f1f1f;--surface:#2d2d2d;--text:#e8eaed;--sub:#9aa0a6;--border:#3c4043;--hover:#3c4043}
+[data-theme="dark"]{--bg:#000;--surface:#000;--text:#e8eaed;--sub:#9aa0a6;--border:#252525;--hover:#171717}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{font-family:Roboto,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;overflow:hidden;font-size:14px}
+body{font-family:inherit;background:var(--bg);color:var(--text);display:flex;overflow:hidden;font-size:14px;zoom:1.1}
 button{font-family:inherit;cursor:pointer}
 input,select,textarea{font-family:inherit}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(4px)}
@@ -39,7 +39,7 @@ input,select,textarea{font-family:inherit}
 .link{color:var(--blue);cursor:pointer;font-size:13px}
 .link:hover{text-decoration:underline}
 #sidebar{width:280px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-.side-head{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.side-head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.side-head .brand{display:none}
 .brand{font-weight:700;color:var(--blue);font-size:16px;flex:1}
 .side-body{flex:1;overflow-y:auto;padding:10px}
 #session-list{display:flex;flex-direction:column;gap:2px}
@@ -59,7 +59,7 @@ input,select,textarea{font-family:inherit}
 #chat-box{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:18px;scroll-behavior:smooth}
 .msg{max-width:min(760px,80%);line-height:1.65;font-size:15px;word-wrap:break-word;position:relative;padding:14px 18px;border-radius:14px}
 .msg.user{align-self:flex-end;background:rgba(26,115,232,.1);color:var(--text);white-space:pre-wrap}
-.msg.assistant{align-self:flex-start;background:var(--bg);border:1px solid var(--border)}
+.msg.assistant{align-self:flex-start;background:transparent;border:0;padding-left:0;padding-right:0}
 .msg.assistant.error{background:rgba(217,48,37,.08);border-color:rgba(217,48,37,.3);color:var(--danger)}
 .msg-tools{position:absolute;top:-10px;right:8px;display:flex;gap:4px;opacity:0;transition:opacity .15s}
 .msg:hover .msg-tools{opacity:1}
@@ -86,7 +86,7 @@ input,select,textarea{font-family:inherit}
 .msg.assistant h1,.msg.assistant h2,.msg.assistant h3{margin:14px 0 8px;line-height:1.3}
 .msg.assistant h1{font-size:20px}.msg.assistant h2{font-size:18px}.msg.assistant h3{font-size:16px}
 .token-info{margin-top:8px;font-size:11px;color:var(--sub);font-style:italic}
-#input-bar{padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:10px;align-items:flex-end;flex-shrink:0}
+#input-bar{padding:14px 20px;border-top:1px solid var(--border);background:var(--surface);display:flex;gap:10px;align-items:flex-end;flex-shrink:0;flex-wrap:wrap}.composer-options{display:flex;gap:8px;align-items:center;width:100%;padding-left:8px}.mini-toggle{border:1px solid var(--border);border-radius:999px;padding:5px 10px;background:transparent;color:var(--sub);font-size:12px}.mini-toggle.active{border-color:var(--blue);color:var(--blue);background:rgba(26,115,232,.10)}.account-button{display:flex;align-items:center;gap:10px;margin:10px;padding:10px;border:0;border-radius:10px;background:transparent;color:var(--text);text-align:left}.account-button:hover{background:var(--hover)}.account-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--hover);font-weight:600}.account-more{margin-left:auto;color:var(--sub)}body.sidebar-collapsed #sidebar{width:56px}body.sidebar-collapsed #session-list,body.sidebar-collapsed .side-body>.btn,body.sidebar-collapsed #account-name,body.sidebar-collapsed .account-more{display:none}body.sidebar-collapsed .account-button{justify-content:center;padding:8px 4px}
 .input-wrap{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:8px 14px;display:flex;align-items:center}
 .input-wrap textarea{flex:1;border:none;background:transparent;resize:none;outline:none;color:var(--text);font-size:15px;line-height:1.5;max-height:140px;min-height:22px}
 .send-btn{width:44px;height:44px;border-radius:50%;border:none;background:var(--blue);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;transition:opacity .15s}
@@ -214,29 +214,22 @@ input,select,textarea{font-family:inherit}
 </div>
 
 <aside id="sidebar">
-  <div class="side-head">
-    <div class="brand">LumaChat</div>
-    <button class="icon-btn" onclick="toggleTheme()" title="切换主题" id="theme-btn">🌙</button>
-  </div>
+  <div class="side-head"><button class="icon-btn" onclick="toggleSidebar()" title="收起侧栏">☰</button><button class="icon-btn" onclick="openSettings()" title="设置">⚙</button></div>
   <div class="side-body">
     <button class="btn" style="width:100%;margin-bottom:12px" onclick="createSession()">＋ 新对话</button>
     <div id="session-list"></div>
   </div>
+  <button id="account-button" class="account-button" onclick="openSettings()" title="账户与设置"><span class="account-avatar">U</span><span id="account-name">账户</span><span class="account-more">⋯</span></button>
 </aside>
 
 <div id="main">
-  <div class="topbar">
-    <select id="prov-select" onchange="onProvChange()"></select>
-    <select id="model-select" onchange="onModelChange()"></select>
-    <div class="spacer"></div>
-    <button class="icon-btn" onclick="openSettings()" title="设置">⚙</button>
-  </div>
+  <div class="topbar"><span id="active-chat-title" style="font-size:14px;color:var(--sub)">新对话</span><div class="spacer"></div></div>
   <div id="chat-box"></div>
   <div id="input-bar">
     <div class="input-wrap">
       <textarea id="prompt-input" placeholder="输入消息，Enter 发送，Shift+Enter 换行" rows="1" onkeydown="onKeyDown(event)" oninput="autoResize(this)"></textarea>
     </div>
-    <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+    <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button><div class="composer-options"><button id="chat-think-toggle" class="mini-toggle" onclick="toggleChatThink()" type="button">✧ 思考模式：关</button><button id="chat-token-toggle" class="mini-toggle" onclick="toggleChatTokens()" type="button">Token 统计：关</button></div>
   </div>
 </div>
 
@@ -340,6 +333,7 @@ async function initApp() {
   await loadUserState();
   await loadProviders();
   if (userState && userState.theme === 'dark') applyTheme(true);
+  document.getElementById('account-name').textContent = currentUser || '账户';
 }
 
 async function loadUserState() {
@@ -489,8 +483,10 @@ function renderChat() {
   box.innerHTML = '';
   if (!userState) return;
   var s = userState.sessions[userState.active_sess_id];
-  if (!s || !s.messages) return;
+  if (!s || !s.messages) { syncChatToggles(); return; }
+  document.getElementById('active-chat-title').textContent = s.title || '新对话';
   s.messages.forEach(function(m){ appendMessageBubble(m.role, m.content); });
+  syncChatToggles();
   box.scrollTop = box.scrollHeight;
 }
 
@@ -517,8 +513,25 @@ function appendMessageBubble(role, content) {
   return div;
 }
 
+function syncChatToggles() {
+  var s = userState && userState.sessions[userState.active_sess_id];
+  var think = !!(s && s.think_enabled);
+  var tokens = s && s.show_tokens != null ? !!s.show_tokens : !!(userState && userState.show_tokens);
+  var t = document.getElementById('chat-think-toggle'), k = document.getElementById('chat-token-toggle');
+  if (t) { t.classList.toggle('active', think); t.textContent = '✧ 思考模式：' + (think ? '开' : '关'); t.title = '本对话单独控制思考模式'; }
+  if (k) { k.classList.toggle('active', tokens); k.textContent = 'Token 统计：' + (tokens ? '开' : '关'); }
+}
+async function persistSessionPrefs() {
+  var s = userState && userState.sessions[userState.active_sess_id]; if (!s) return;
+  var res = await fetch('/api/session/preferences', {method:'POST',headers:{'Content-Type':'application/json','X-User':currentUser,'Authorization':'Bearer '+authToken},body:JSON.stringify({session_id:s.id,think_enabled:!!s.think_enabled,show_tokens:s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens})});
+  if (!res.ok) toast('会话设置保存失败', 'err'); syncChatToggles();
+}
+function toggleChatThink() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; s.think_enabled=!s.think_enabled; persistSessionPrefs(); }
+function toggleChatTokens() { var s=userState && userState.sessions[userState.active_sess_id]; if (!s) return; var cur=s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens; s.show_tokens=!cur; persistSessionPrefs(); }
+function toggleSidebar() { document.body.classList.toggle('sidebar-collapsed'); }
+
 function onKeyDown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendMessage();
   }
@@ -561,7 +574,7 @@ async function sendMessage() {
     var res = await fetch('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-      body: JSON.stringify({session_id: s.id, prompt: txt}),
+      body: JSON.stringify({session_id: s.id, prompt: txt, think_enabled: !!s.think_enabled, show_tokens: (s.show_tokens == null ? !!userState.show_tokens : !!s.show_tokens)}),
       signal: abortCtrl.signal
     });
     if (!res.ok) {
@@ -649,6 +662,7 @@ function openSettings() {
   renderProvList();
   syncPrefsUI();
   document.getElementById('acc-user').value = currentUser;
+  document.getElementById('account-name').textContent = currentUser || '账户';
 }
 
 function closeSettings() {
@@ -686,12 +700,27 @@ function renderProvList() {
         '<div>模型: ' + modelList + '</div>' +
       '</div>' +
       '<div class="prov-item-actions">' +
-        '<button class="btn danger sm">删除</button>' +
+        '<button class="btn ghost sm edit-provider-btn">编辑</button> ' + '<button class="btn danger sm">删除</button>' +
       '</div>';
-    var delBtn = item.querySelector('button');
+    var editBtn = item.querySelector('.edit-provider-btn');
+    editBtn.onclick = function() { editProvider(p.name); };
+    var delBtn = item.querySelector('.btn.danger');
     delBtn.onclick = function() { deleteProvider(p.name); };
     box.appendChild(item);
   });
+}
+
+function editProvider(name) {
+  var p = providers.find(function(x){ return x.name === name; }); if (!p) return;
+  editingProviderName = p.name;
+  document.getElementById('add-name').value = p.name;
+  document.getElementById('add-url').value = p.base_url || '';
+  document.getElementById('add-key').value = '';
+  document.getElementById('add-key').placeholder = '留空则保留原 API Key';
+  var list = document.getElementById('model-list'); list.innerHTML = '';
+  (p.models || []).forEach(function(model){ var label=document.createElement('label'); label.className='model-option'; var cb=document.createElement('input'); cb.type='checkbox'; cb.className='model-chk'; cb.checked=true; cb.value=model; var span=document.createElement('span'); span.textContent=model; label.appendChild(cb); label.appendChild(span); list.appendChild(label); });
+  switchTab('add-provider', document.querySelector('.tab[onclick*=\"add-provider\"]'));
+  toast('正在编辑服务商：' + name, 'info');
 }
 
 function escapeHtml(s) {
@@ -765,12 +794,14 @@ async function saveAllSettings() {
   var key = document.getElementById('add-key').value.trim();
   var checked = Array.prototype.slice.call(document.querySelectorAll('.model-chk:checked')).map(function(c){ return c.value; });
   if (name && url && checked.length) {
-    var res = await fetch('/api/providers/add', {method: 'POST',
+    var res = await fetch(editingProviderName ? '/api/providers/update' : '/api/providers/add', {method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-User': currentUser, 'Authorization': 'Bearer ' + authToken},
-      body: JSON.stringify({name: name, base_url: url, api_key: key, models: checked})});
+      body: JSON.stringify(editingProviderName ? {original_name: editingProviderName, name: name, base_url: url, api_key: key, models: checked} : {name: name, base_url: url, api_key: key, models: checked})});
     var data = await res.json();
     if (!res.ok) return toast(data.message || '添加失败', 'err');
-    toast('服务商已添加', 'ok');
+    toast(editingProviderName ? '服务商已更新' : '服务商已添加', 'ok');
+    editingProviderName = '';
+    document.getElementById('add-key').placeholder = 'sk-...';
     document.getElementById('add-name').value = '';
     document.getElementById('add-url').value = '';
     document.getElementById('add-key').value = '';
@@ -820,7 +851,7 @@ async function changePassword() {
 
 function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  document.getElementById('theme-btn').textContent = dark ? '☀' : '🌙';
+  
   var link = document.querySelector('link[href*="highlight.js"]');
   if (link) link.href = dark
     ? 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css'
