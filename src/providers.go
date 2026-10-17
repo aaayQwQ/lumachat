@@ -56,6 +56,8 @@ func handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		BaseURL      string   `json:"base_url"`
 		APIKey       string   `json:"api_key"`
 		Models       []string `json:"models"`
+		ThinkingSwitch bool `json:"thinking_switch"`
+		SearchExtraBody bool `json:"search_extra_body"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
 	req.OriginalName = strings.TrimSpace(req.OriginalName)
@@ -73,7 +75,7 @@ func handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		if _, exists := providers[req.Name]; exists { mu.Unlock(); writeErr(w, 409, "新服务商名称已被使用"); return }
 	}
 	if req.APIKey == "" || req.APIKey == "****" || strings.Contains(req.APIKey, "...") { req.APIKey = old.APIKey }
-	updated := Provider{Name: req.Name, BaseURL: req.BaseURL, APIKey: req.APIKey, Models: req.Models, CreatedAt: old.CreatedAt}
+	updated := Provider{Name: req.Name, BaseURL: req.BaseURL, APIKey: req.APIKey, Models: req.Models, ThinkingSwitch: req.ThinkingSwitch, SearchExtraBody: req.SearchExtraBody, CreatedAt: old.CreatedAt}
 	type selection struct { prov, model string }
 	oldSelections := make(map[string]selection)
 	for name, u := range users { if u != nil { oldSelections[name] = selection{u.SelectedProv, u.SelectedModel} } }
@@ -114,7 +116,7 @@ func cleanModels(models []string) []string {
 
 func validBaseURL(raw string) bool {
 	u, err := url.Parse(raw)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 
 func handleDeleteProvider(w http.ResponseWriter, r *http.Request) {
