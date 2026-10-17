@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json"\n\t"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -41,38 +41,52 @@ func loadProvidersUnsafe() {
 		return
 	}
 	path := providerConfigPath()
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		providers["DeepSeek官方"] = Provider{
-			Name: "DeepSeek官方", BaseURL: "https://api.deepseek.com",
-			APIKey: "sk-your-key-here", Models: []string{"deepseek-chat", "deepseek-reasoner"},
-			CreatedAt: time.Now(),
+	data, err := ioutil.ReadFile(path)
+	if os.IsNotExist(err) {
+		providers = make(map[string]Provider)
+		example := []byte("# LumaChat 自定义服务商配置\\n# 在网页设置中添加服务商，或按格式编辑本文件。\\n# Base URL 填 API 根地址，不要填 /chat/completions。\\n\\n")
+		if writeErr := writeConfigAtomically(path, example, 0600, "config"); writeErr != nil {
+			log.Printf("[config] 初始化配置文件失败: %v", writeErr)
+			return
 		}
-		saveConfigUnsafe()
+		log.Printf("[config] 尚未配置服务商，请在网页设置中添加自定义服务商")
 		return
 	}
-	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		log.Printf("[config] 读取失败: %v", err)
 		return
 	}
+
 	newProviders := make(map[string]Provider)
-	lines := strings.Split(string(data), "\n")
+	lines := strings.Split(string(data), "\\n")
 	var curr *Provider
 	flush := func() {
-		if curr != nil && curr.Name != "" {
-			if curr.CreatedAt.IsZero() { curr.CreatedAt = time.Now() }
-			newProviders[curr.Name] = *curr
+		if curr == nil { return }
+		curr.Name = strings.TrimSpace(curr.Name)
+		curr.BaseURL = strings.TrimRight(strings.TrimSpace(curr.BaseURL), "/")
+		curr.APIKey = strings.TrimSpace(curr.APIKey)
+		seen := make(map[string]bool)
+		models := make([]string, 0, len(curr.Models))
+		for _, model := range curr.Models {
+			model = strings.TrimSpace(model)
+			if model != "" && !seen[model] { seen[model] = true; models = append(models, model) }
 		}
+		curr.Models = models
+		if curr.Name == "" && curr.BaseURL == "" && curr.APIKey == "" && len(curr.Models) == 0 { curr = nil; return }
+		if curr.Name == "" || curr.BaseURL == "" || len(curr.Models) == 0 ||
+			(!strings.HasPrefix(curr.BaseURL, "http://") && !strings.HasPrefix(curr.BaseURL, "https://")) {
+			log.Printf("[config] 跳过无效服务商配置（name=%q）", curr.Name)
+			curr = nil
+			return
+		}
+		if curr.CreatedAt.IsZero() { curr.CreatedAt = time.Now() }
+		newProviders[curr.Name] = *curr
 		curr = nil
 	}
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") { continue }
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			flush()
-			curr = &Provider{}
-			continue
-		}
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") { continue }
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") { flush(); curr = &Provider{}; continue }
 		if curr == nil { continue }
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 { continue }
@@ -81,17 +95,13 @@ func loadProvidersUnsafe() {
 		case "name": curr.Name = v
 		case "base_url": curr.BaseURL = v
 		case "api_key": curr.APIKey = v
-		case "models":
-			for _, m := range strings.Split(v, ",") {
-				if m = strings.TrimSpace(m); m != "" { curr.Models = append(curr.Models, m) }
-			}
+		case "models": curr.Models = append(curr.Models, strings.Split(v, ",")...)
 		}
 	}
 	flush()
-	if len(newProviders) > 0 {
-		providers = newProviders
-		log.Printf("[config] 已加载 %d 个服务商", len(newProviders))
-	}
+	// Empty provider lists are valid and must replace the previous in-memory configuration.
+	providers = newProviders
+	log.Printf("[config] 已加载 %d 个自定义服务商", len(newProviders))
 }
 
 func loadUsersUnsafe() {
@@ -125,22 +135,19 @@ func loadUsersUnsafe() {
 	log.Printf("[config] 已加载 %d 个用户", len(loaded))
 }
 
-func saveConfigUnsafe() {
-	if err := ensureConfigDir(); err != nil {
-		log.Printf("[config] 创建配置目录失败: %v", err)
-		return
-	}
+func saveConfigUnsafe() error {
+	if err := ensureConfigDir(); err != nil { return err }
 	var sb strings.Builder
-	sb.WriteString("# LumaChat v" + version + " 服务商配置\n")
-	sb.WriteString("# 修改后 2 秒内自动热加载\n\n")
+	sb.WriteString("# LumaChat v" + version + " 自定义服务商配置\\n")
+	sb.WriteString("# 修改后约 2 秒内自动热加载\\n\\n")
 	for _, p := range providers {
-		sb.WriteString("[provider]\n")
-		sb.WriteString("name=" + p.Name + "\n")
-		sb.WriteString("base_url=" + p.BaseURL + "\n")
-		sb.WriteString("api_key=" + p.APIKey + "\n")
-		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\n\n")
+		sb.WriteString("[provider]\\n")
+		sb.WriteString("name=" + p.Name + "\\n")
+		sb.WriteString("base_url=" + p.BaseURL + "\\n")
+		sb.WriteString("api_key=" + p.APIKey + "\\n")
+		sb.WriteString("models=" + strings.Join(p.Models, ",") + "\\n\\n")
 	}
-	writeConfigAtomically(providerConfigPath(), []byte(sb.String()), 0600, "config")
+	return writeConfigAtomically(providerConfigPath(), []byte(sb.String()), 0600, "config")
 }
 
 func saveUsersSync() {
@@ -149,25 +156,35 @@ func saveUsersSync() {
 	mu.Unlock()
 	if err != nil { log.Printf("[user] 序列化失败: %v", err); return }
 	if err := ensureConfigDir(); err != nil { log.Printf("[user] 创建配置目录失败: %v", err); return }
-	writeConfigAtomically(userDataPath(), data, 0600, "user")
+	if err := writeConfigAtomically(userDataPath(), data, 0600, "user"); err != nil { log.Printf("[user] 保存失败: %v", err) }
 }
 
-func writeConfigAtomically(path string, data []byte, mode os.FileMode, label string) {
+func writeConfigAtomically(path string, data []byte, mode os.FileMode, label string) error {
 	tmp := path + ".tmp"
 	if err := ioutil.WriteFile(tmp, data, mode); err != nil {
-		log.Printf("[%s] 写入临时文件失败: %v", label, err)
-		return
+		return fmt.Errorf("[%s] 写入临时文件失败: %w", label, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		// Windows does not replace an existing destination with os.Rename.
-		if removeErr := os.Remove(path); removeErr == nil || os.IsNotExist(removeErr) {
-			retryErr := os.Rename(tmp, path)
-			if retryErr == nil { return }
-			err = retryErr
+		// Windows can't replace an existing destination. Preserve the previous file if replacement fails.
+		backup := path + ".bak"
+		_ = os.Remove(backup)
+		if _, statErr := os.Stat(path); statErr == nil {
+			if backupErr := os.Rename(path, backup); backupErr != nil {
+				_ = os.Remove(tmp)
+				return fmt.Errorf("[%s] 备份旧文件失败: %w", label, backupErr)
+			}
+			if retryErr := os.Rename(tmp, path); retryErr != nil {
+				_ = os.Rename(backup, path)
+				_ = os.Remove(tmp)
+				return fmt.Errorf("[%s] 替换配置文件失败: %w", label, retryErr)
+			}
+			_ = os.Remove(backup)
+			return nil
 		}
 		_ = os.Remove(tmp)
-		log.Printf("[%s] 替换配置文件失败: %v", label, err)
+		return fmt.Errorf("[%s] 替换配置文件失败: %w", label, err)
 	}
+	return nil
 }
 
 func saveUsersDebounced() {
