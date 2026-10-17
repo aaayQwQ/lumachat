@@ -33,7 +33,8 @@ func handleAddProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Name = strings.TrimSpace(p.Name)
-	p.BaseURL = strings.TrimSpace(p.BaseURL)
+	p.BaseURL = strings.TrimRight(strings.TrimSpace(p.BaseURL), "/")
+	p.APIKey = strings.TrimSpace(p.APIKey)
 	if p.Name == "" || p.BaseURL == "" || len(p.Models) == 0 {
 		writeErr(w, 400, "名称、URL、模型不能为空")
 		return
@@ -64,7 +65,7 @@ func handleUpdateProvider(w http.ResponseWriter, r *http.Request) {
 		Models []string `json:"models"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { writeErr(w, 400, "参数错误"); return }
-	req.OriginalName = strings.TrimSpace(req.OriginalName); req.Name = strings.TrimSpace(req.Name); req.BaseURL = strings.TrimSpace(req.BaseURL)
+	req.OriginalName = strings.TrimSpace(req.OriginalName); req.Name = strings.TrimSpace(req.Name); req.BaseURL = strings.TrimRight(strings.TrimSpace(req.BaseURL), "/"); req.APIKey = strings.TrimSpace(req.APIKey)
 	if req.OriginalName == "" || req.Name == "" || req.BaseURL == "" || len(req.Models) == 0 { writeErr(w, 400, "名称、URL、模型不能为空"); return }
 	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") { writeErr(w, 400, "BaseURL 必须以 http:// 或 https:// 开头"); return }
 	mu.Lock(); old, ok := providers[req.OriginalName]
@@ -116,8 +117,16 @@ func handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		BaseURL string `json:"base_url"`
 		APIKey  string `json:"api_key"`
+		ProviderName string `json:"provider_name"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	req.BaseURL = strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	if req.APIKey == "" && req.ProviderName != "" {
+		mu.RLock()
+		if p, ok := providers[req.ProviderName]; ok { req.APIKey = p.APIKey }
+		mu.RUnlock()
+	}
 	if req.BaseURL == "" {
 		writeErr(w, 400, "base_url 为空")
 		return
@@ -149,8 +158,16 @@ func handleFetchModels(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		BaseURL string `json:"base_url"`
 		APIKey  string `json:"api_key"`
+		ProviderName string `json:"provider_name"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	req.BaseURL = strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
+	req.APIKey = strings.TrimSpace(req.APIKey)
+	if req.APIKey == "" && req.ProviderName != "" {
+		mu.RLock()
+		if p, ok := providers[req.ProviderName]; ok { req.APIKey = p.APIKey }
+		mu.RUnlock()
+	}
 	if req.BaseURL == "" {
 		writeErr(w, 400, "base_url 为空")
 		return
