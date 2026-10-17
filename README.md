@@ -2,56 +2,32 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**LumaChat** is a lightweight, self-hosted AI chat web application written in Go. It provides local account login, multi-conversation chat, OpenAI-compatible model provider configuration, and streaming responses over Server-Sent Events (SSE).
+**LumaChat** is a developer-oriented, self-hosted AI chat web app written in Go. It supports local accounts, multiple conversations, streaming responses, and manually configured OpenAI Chat Completions-compatible providers.
 
-> **Project status:** This is a buildable foundation intended for personal testing and self-hosting experiments. Read the security notes below before exposing it to a network. It should not currently be exposed directly to the public internet as a production multi-user service.
+This project intentionally ships **without a default AI provider or API key**. Configure a compatible endpoint and its model IDs yourself.
 
 ## Features
 
-- Local user registration and login
-- Separate chat conversations for each account
-- Support for providers and models compatible with the OpenAI API
-- SSE streaming responses
-- Provider configuration through a plain-text INI file
-- Backend uses the Go standard library and requires no third-party Go modules
-- GitHub Actions checks formatting, tests, static analysis, and builds
+- Local registration and login
+- Independent multi-session chat history per account
+- Custom OpenAI-compatible provider configuration
+- Streaming responses using Server-Sent Events (SSE)
+- Runtime provider configuration stored in a plain-text INI file and hot-reloaded
+- Go standard-library backend; no third-party Go modules are required
 
 ## Requirements
 
-- Go 1.20 or later
+- Go 1.20 or later to build
 - An API endpoint compatible with the OpenAI Chat Completions API
-- An API key for the selected provider
+- The provider's model ID and, when required, its API key
 
 ## Quick start
 
-### 1. Clone the repository
+Clone and build:
 
 ```sh
 git clone https://github.com/aaayQwQ/lumachat.git
 cd lumachat
-```
-
-### 2. Create the configuration file
-
-Linux/macOS:
-
-```sh
-cp config.example.ini config.ini
-```
-
-Windows PowerShell:
-
-```powershell
-Copy-Item config.example.ini config.ini
-```
-
-Edit `config.ini` and replace the example API key with your own. The example configuration uses DeepSeek; you can adapt it for another OpenAI-compatible provider.
-
-### 3. Build and run
-
-Linux/macOS:
-
-```sh
 go build -o lumachat ./src
 ./lumachat
 ```
@@ -59,70 +35,79 @@ go build -o lumachat ./src
 Windows PowerShell:
 
 ```powershell
+git clone https://github.com/aaayQwQ/lumachat.git
+Set-Location lumachat
 go build -o lumachat.exe ./src
 .\lumachat.exe
 ```
 
-The default listen address is `0.0.0.0:8080`. After startup, open this URL in your browser:
+The first launch creates a `config` directory beside the executable and an empty `config/config.ini`. Start the app, register a local account, and add your own provider under **Settings → Add Provider**. You can load model IDs from the provider's `/models` endpoint or add them manually if that endpoint is unsupported.
 
-http://127.0.0.1:8080
+To configure the provider before launching, copy the example into the runtime configuration directory:
 
-If you only intend to use the application locally, restrict external access with your firewall. To change the listen address or port, check the server listener settings in the source code for the version you are running.
+Linux/macOS:
 
-## Configuration
-
-The application uses a **plain-text, unencrypted INI file** named `config.ini`. The repository includes `config.example.ini`, which should not contain real credentials.
-
-Example:
-
-```ini
-[provider_deepseek]
-name=DeepSeek
-base_url=https://api.deepseek.com
-api_key=replace_with_your_own_api_key
-models=deepseek-chat,deepseek-reasoner
+```sh
+mkdir -p config
+cp config.example.ini config/config.ini
 ```
 
-| Field | Description |
-|---|---|
-| Section name | Unique provider identifier, such as `provider_deepseek` |
-| `name` | Provider name displayed in the web interface |
-| `base_url` | Provider API base URL |
-| `api_key` | Provider API key, stored as plain text |
-| `models` | Comma-separated list of model IDs |
+Windows PowerShell:
 
-API paths and model IDs vary by provider. Refer to the provider's official documentation. Never commit a real `config.ini`, publish it in a public issue, or include it in a publicly downloadable backup.
+```powershell
+New-Item -ItemType Directory -Force config | Out-Null
+Copy-Item config.example.ini config/config.ini
+```
 
-## Runtime data files
+Edit `config/config.ini` and replace the example URL, model ID, and API key before starting the app.
 
-- `config.ini`: provider configuration, including API keys stored in plain text.
-- `users.json`: local account and related chat data used by the application.
+## Provider configuration
 
-Both runtime files are listed in `.gitignore`. You are still responsible for backups, file permissions, and access controls on the host.
+`config/config.ini` is a plain-text INI file. It is created beside the executable; changing it triggers a reload after a short delay.
+
+```ini
+[provider_custom]
+name=My Custom API
+base_url=https://api.example.com/v1
+api_key=replace-with-your-api-key
+models=your-model-id
+thinking_switch=false
+search_extra_body=false
+```
+
+- Each INI section defines a provider. The section name is an identifier; the values are what the app uses.
+- `base_url` is the API root. LumaChat appends `/chat/completions` for chat and `/models` for model discovery. Do not include either path in the base URL.
+- `models` is a comma-separated list of model IDs. If the provider does not expose `/models`, enter the IDs manually in the UI.
+- `api_key` is stored in plain text. It may be empty for endpoints that do not require authentication.
+- `thinking_switch=true` opts into sending the non-standard `thinking: {type: enabled|disabled}` field. Keep it false unless your endpoint supports that field.
+- `search_extra_body=true` opts into sending `extra_body.search=false` when the per-user setting disables web search. This is also non-standard and should remain false unless supported by your endpoint.
+
+These provider-specific options default to false so a custom endpoint is not sent vendor-specific fields unexpectedly. LumaChat uses a Bearer authorization header for configured API keys.
+
+## Runtime data
+
+- `config/config.ini`: custom provider endpoints, model IDs, and API keys.
+- `config/users.json`: local accounts, preferences, and chat history.
+
+Both files contain sensitive data and are stored as plain text. Do not commit them or publish backups that contain real credentials.
 
 ## Checks and build
 
 ```sh
-gofmt -w src/main.go src/types.go
+gofmt -w src/*.go
 go test ./...
 go vet ./...
 go build ./...
 ```
 
-GitHub Actions runs these checks on pushes and pull requests.
+GitHub Actions runs formatting, tests, vet, and build checks.
 
-## Security and deployment notes
+## Security notes
 
-1. **INI is not encryption.** API keys in `config.ini` are stored as plain text. Restrict filesystem permissions, especially on shared hosts.
-2. **Do not expose the application directly to the public internet.** It listens on all network interfaces by default. A public deployment should use HTTPS, a reverse proxy, access restrictions, and a firewall.
-3. **Authentication needs further hardening.** This version is intended for development and personal testing. Before production use, review password hashing, session lifetime, logout and token revocation, login rate limiting, CSRF/XSS risks, and backup procedures.
-4. **Do not reuse important passwords.** Use a dedicated password for test accounts.
-5. **You are responsible for API charges.** Requests use the provider account and API key you configure. Check the provider's quotas, pricing, and terms.
+This is a developer-oriented foundation, not a hardened public multi-user service. It listens on `0.0.0.0:8080` by default. Before exposing it to a network, configure HTTPS, a reverse proxy, access controls, and a firewall. Password hashing, session lifetime, rate limiting, and other security controls should be reviewed before production deployment.
+
+Never publish API keys, passwords, cookies, private conversations, or complete sensitive configuration files in issues or logs.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
-
-## Reporting issues
-
-When opening an issue, include reproduction steps, your Go version, operating system, and sanitized logs. **Do not post API keys, passwords, cookies, private chat history, or complete sensitive configuration files.**
+MIT. See [LICENSE](LICENSE).
