@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"bufio"
 	"bytes"
 	"context"
@@ -118,28 +119,20 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// ==================== 页面模板（运行时加载外部文件） ====================
+// ==================== 内嵌网页模板 ====================
+
+//go:embed web/index.html
+var embeddedHTML embed.FS
 
 var htmlTemplate string
 
 func loadTemplate() {
-	candidates := []string{
-		filepath.Join(exeDir(), "src", "web", "index.html"),
-		filepath.Join(exeDir(), "web", "index.html"),
-		"src/web/index.html",
-		"index.html",
-		filepath.Join(exeDir(), "index.html"),
+	data, err := embeddedHTML.ReadFile("web/index.html")
+	if err != nil {
+		log.Fatalf("[web] 读取内嵌页面失败: %v", err)
 	}
-	for _, p := range candidates {
-		data, err := ioutil.ReadFile(p)
-		if err == nil {
-			htmlTemplate = string(data)
-			log.Printf("[web] 已加载模板: %s (%d 字节)", p, len(data))
-			return
-		}
-	}
-	wd, _ := os.Getwd()
-	log.Fatalf("[web] 找不到 web/index.html，工作目录: %s，请确认文件存在", wd)
+	htmlTemplate = string(data)
+	log.Printf("[web] 已加载内嵌模板 (%d 字节)", len(data))
 }
 
 func exeDir() string {
