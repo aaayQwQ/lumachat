@@ -107,7 +107,3 @@ GitHub Actions runs formatting, tests, vet, and build checks.
 This is a developer-oriented foundation, not a hardened public multi-user service. It listens on `0.0.0.0:8080` by default. Before exposing it to a network, configure HTTPS, a reverse proxy, access controls, and a firewall. Password hashing, session lifetime, rate limiting, and other security controls should be reviewed before production deployment.
 
 Never publish API keys, passwords, cookies, private conversations, or complete sensitive configuration files in issues or logs.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
